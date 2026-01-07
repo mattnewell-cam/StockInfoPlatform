@@ -7,7 +7,12 @@ class CompanyAdmin(admin.ModelAdmin):
     search_fields = ("ticker", "name")
     list_filter = ("exchange", "currency")
 
+@admin.register(Financial)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ("company", "period_end_date", "statement", "metric", "value")
+    search_fields = ("period_end_date", "metric")
+    list_filter = ("company", "statement")
+
 
 admin.site.register(Follow)
 admin.site.register(Filing)
-admin.site.register(Financial)

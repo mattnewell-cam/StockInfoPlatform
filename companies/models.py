@@ -36,6 +36,7 @@ class Company(models.Model):
         :param financials_dict: {'IS': [['', '2015', '2016', ...], ['Revenue', '43.1', '45.6', ...], ...], 'BS': ...}
         """
         self.FYE_month = self.FYE_month or fye_month
+        print(self.FYE_month)
         assert self.FYE_month
 
         # Ugly bodge: tell if TTM is HY or FY by comparing sales & NI to prior period
@@ -43,35 +44,53 @@ class Company(models.Model):
                      financials_dict["CF"][1][-1] == financials_dict["CF"][1][-2])
 
         entries = []
-        for statement, data in financials_dict:
+        for statement, data in financials_dict.items():
             years = data[0]
             for line in data[1:]:
                 metric = line[0]
                 for year_index, value in enumerate(line[1:]):
 
-                    year = years[year_index]
+                    year = years[year_index + 1]  # Because enumerate starts at 0 but we're going from line[1]
 
                     # Continuation of ugly bodge
                     if year == "TTM":
                         if ttm_is_fy:  # Avoid duplicate entry
                             continue
                         else:
-                            year = int(years[-2]) + self.FYE_month > 6
-                            month = self.FYE_month - 6 * (self.FYE_month > 6)
+                            year = int(years[-2])
+                            if self.FYE_month > 6:
+                                year += 1
+                                month = self.FYE_month - 6
+                            else:
+                                month = self.FYE_month + 6
                             period_end_date = end_of_month(year, month)
                     else:
-                        period_end_date = end_of_month(year, self.FYE_month)
+                        period_end_date = end_of_month(int(year), self.FYE_month)
 
-                    year = int(years[year_index])
-                    value = int(value.replace(",", "").replace("-", 0))
+                    value = float(value.replace(",", "").replace("-", "0").replace("£", ""))
                     entries.append(Financial(
-                        self,
-                        period_end_date,
-                        statement,
-                        metric,
-                        value,
-                        self.currency
+                        company=self,
+                        period_end_date=period_end_date,
+                        statement=statement,
+                        metric=metric,
+                        value=value,
+                        currency=self.currency
                     ))
+                    # try:
+                    #     Financial.objects.update_or_create(
+                    #         company=self,
+                    #         period_end_date=period_end_date,
+                    #         statement=statement,
+                    #         metric=metric,
+                    #         defaults={
+                    #             "value": value,
+                    #             "currency": self.currency
+                    #         }
+                    #     )
+                    #     print(f"Successfully created {period_end_date} {metric} for {self.ticker}")
+                    # except Exception as e:
+                    #     print(e)
+
 
         Financial.objects.bulk_create(entries, ignore_conflicts=True)
 

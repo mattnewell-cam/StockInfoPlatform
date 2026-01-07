@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 
 from companies.models import Company
 import yfinance as yf
+import csv
 from datetime import datetime, timezone
 
 class Command(BaseCommand):
@@ -9,8 +10,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        with open("tickers.csv") as csv:
-            tickers = csv.readlines()
+        with open("tickers.csv") as f:
+            tickers = [l[0] for l in list(csv.reader(f))]
+        print(tickers)
 
         for t in tickers:
             try:
@@ -21,24 +23,29 @@ class Command(BaseCommand):
                 name = info["longName"].replace("Public Limited Company", "plc")
                 exchange = info["exchange"]
                 currency = info["currency"]
-                ts = info["lastFiscalYearEnd"]
-                fye_date = datetime.fromtimestamp(ts, tz=timezone.utc).date().month
                 sector = info["sectorDisp"]
                 industry = info["industryDisp"]
+
+                try:
+                    ts = info["lastFiscalYearEnd"]
+                    fye_month = datetime.fromtimestamp(ts, tz=timezone.utc).date().month
+                except Exception:
+                    print(f"YF has no FYE data for {t} - assuming Dec.")
+                    fye_month = 12
 
                 Company.objects.create(
                     name=name,
                     exchange=exchange,
                     ticker=t,
                     currency=currency,
-                    FYE_month=fye_date,
+                    FYE_month=fye_month,
                     sector=sector,
                     industry=industry,
                 )
 
-                print(f"Added {name}")
+                print(f"Added {name} ({t})")
 
             except Exception as e:
                 print(e)
-                print(f"{name} already defined. Skipping...")
+                print(f"{t} already defined. Skipping...")
 

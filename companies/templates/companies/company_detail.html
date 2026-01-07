@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+<h1>{{ company.name}} ({{ company.ticker }})</h1>
+<label for="stmt">Statement</label>
+<select id="stmt">
+    <option value="IS">Income Statement</option>
+    <option value="BS">Balance Sheet</option>
+    <option value="CF">Cash Flow</option>
+</select>
+
+<div id="table-is">
+    {% include "companies/statement_table.html" with table=IS_table %}
+</div>
+<div id="table-bs">
+    {% include "companies/statement_table.html" with table=BS_table %}
+</div>
+<div id="table-cf">
+    {% include "companies/statement_table.html" with table=CF_table %}
+</div>
+
+<script>
+    const select = document.getElementById("stmt");
+    const ids = { IS: "table-is", BS: "table-bs", CF: "table-cf" };
+
+    function show(which) {
+        Object.values(ids).forEach(id => document.getElementById(id).style.display = "none");
+        document.getElementById(ids[which]).style.display = "block";
+    }
+    select.addEventListener("change", () => show(select.value));
+    show(select.value);
+</script>
+
+</body>
+</html>
