@@ -3,7 +3,7 @@ from .models import Company, Follow, Filing, Financial
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("ticker", "exchange", "currency", "name")
+    list_display = ("ticker", "exchange", "currency", "name", "description", "special_sits", "writeups")
     search_fields = ("ticker", "name")
     list_filter = ("exchange", "currency")
 

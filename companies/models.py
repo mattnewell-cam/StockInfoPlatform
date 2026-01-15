@@ -15,6 +15,7 @@ class Company(models.Model):
 
     description = models.TextField(blank=True, default="")
     special_sits = models.TextField(blank=True, default="")
+    writeups = models.JSONField(blank=True, default=list)
     history = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
