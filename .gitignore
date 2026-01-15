@@ -1,5 +1,6 @@
 .idea
 .venv
+.env
 db.sqlite3
 tickers.csv
 ToDo.txt
