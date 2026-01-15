@@ -20,28 +20,39 @@
     <div class="max-w-7xl mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">{{ company.name }} ({{ company.ticker }})</h1>
 
-        <!-- Price Chart Card -->
+        <!-- Top Row: Description + Chart -->
         {% if price_data_json != "[]" %}
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
-                    <button data-period="1d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1D</button>
-                    <button data-period="5d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5D</button>
-                    <button data-period="1m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1M</button>
-                    <button data-period="6m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">6M</button>
-                    <button data-period="1y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100 bg-blue-100 border-blue-500">1Y</button>
-                    <button data-period="5y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5Y</button>
-                    <button data-period="max" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">Max</button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <label for="chart-type" class="text-sm font-medium text-gray-700">Type</label>
-                    <select id="chart-type" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
-                        <option value="line">Line</option>
-                        <option value="candlestick">Candlestick</option>
-                    </select>
-                </div>
+        <div class="grid grid-cols-3 gap-6 mb-6">
+            <!-- Business Description (1/3) -->
+            {% if company.description %}
+            <div class="col-span-1 bg-white rounded-lg shadow p-6 flex flex-col" style="height: 470px;">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">Business Description</h2>
+                <div id="description-content" class="text-gray-700 text-sm leading-relaxed prose overflow-y-auto flex-grow"></div>
             </div>
-            <div id="chart-container" style="height: 500px;"></div>
+            {% endif %}
+
+            <!-- Price Chart (2/3) -->
+            <div class="{% if company.description %}col-span-2{% else %}col-span-3{% endif %} bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <button data-period="1d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1D</button>
+                        <button data-period="5d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5D</button>
+                        <button data-period="1m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1M</button>
+                        <button data-period="6m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">6M</button>
+                        <button data-period="1y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100 bg-blue-100 border-blue-500">1Y</button>
+                        <button data-period="5y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5Y</button>
+                        <button data-period="max" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">Max</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label for="chart-type" class="text-sm font-medium text-gray-700">Type</label>
+                        <select id="chart-type" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
+                            <option value="line">Line</option>
+                            <option value="candlestick">Candlestick</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="chart-container" style="height: 370px;"></div>
+            </div>
         </div>
         {% endif %}
 
@@ -67,38 +78,30 @@
             </div>
         </div>
 
-        <!-- AI Summaries Section -->
-        <div class="space-y-6">
-            {% if company.description %}
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-900 mb-3">Business Description</h2>
-                <div id="description-content" class="text-gray-700 text-sm leading-relaxed prose"></div>
-            </div>
-            {% endif %}
-
-            {% if company.special_sits %}
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-900 mb-3">Special Situations</h2>
-                <div id="special-sits-content" class="text-gray-700 text-sm leading-relaxed prose"></div>
-            </div>
-            {% endif %}
-
-            {% if company.writeups %}
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-900 mb-3">Write-ups</h2>
-                <ul class="space-y-2">
-                    {% for url in company.writeups %}
-                    <li>
-                        <a href="{{ url }}" target="_blank" rel="noopener"
-                           class="text-blue-600 hover:text-blue-800 text-sm break-all hover:underline">
-                            {{ url }}
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
+        <!-- Special Situations -->
+        {% if company.special_sits %}
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Special Situations</h2>
+            <div id="special-sits-content" class="text-gray-700 text-sm leading-relaxed prose"></div>
         </div>
+        {% endif %}
+
+        <!-- Write-ups -->
+        {% if company.writeups %}
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Write-ups</h2>
+            <ul class="space-y-2">
+                {% for url in company.writeups %}
+                <li>
+                    <a href="{{ url }}" target="_blank" rel="noopener"
+                       class="text-blue-600 hover:text-blue-800 text-sm break-all hover:underline">
+                        {{ url }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Chart initialization -->
