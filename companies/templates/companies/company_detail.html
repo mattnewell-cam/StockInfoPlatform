@@ -6,6 +6,7 @@
     <title>{{ company.name }} ({{ company.ticker }})</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         .prose p { margin-bottom: 1em; }
         .prose p:last-child { margin-bottom: 0; }
@@ -18,6 +19,31 @@
 <body class="bg-gray-50 min-h-screen">
     <div class="max-w-7xl mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">{{ company.name }} ({{ company.ticker }})</h1>
+
+        <!-- Price Chart Card -->
+        {% if price_data_json != "[]" %}
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <button data-period="1d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1D</button>
+                    <button data-period="5d" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5D</button>
+                    <button data-period="1m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">1M</button>
+                    <button data-period="6m" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">6M</button>
+                    <button data-period="1y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100 bg-blue-100 border-blue-500">1Y</button>
+                    <button data-period="5y" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">5Y</button>
+                    <button data-period="max" class="period-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-100">Max</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="chart-type" class="text-sm font-medium text-gray-700">Type</label>
+                    <select id="chart-type" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
+                        <option value="line">Line</option>
+                        <option value="candlestick">Candlestick</option>
+                    </select>
+                </div>
+            </div>
+            <div id="chart-container" style="height: 500px;"></div>
+        </div>
+        {% endif %}
 
         <!-- Financial Statements Card -->
         <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -74,6 +100,192 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Chart initialization -->
+    <script>
+        (function() {
+            const ticker = "{{ company.ticker }}";
+            const allPriceData = {{ price_data_json|safe }};
+            const allVolumeData = {{ volume_data_json|safe }};
+
+            if (allPriceData.length === 0) return;
+
+            const container = document.getElementById('chart-container');
+            if (!container) return;
+
+            let chart = null;
+            let currentPeriod = '1y';
+            let currentChartType = 'line';
+            let currentPriceData = [];
+            let currentVolumeData = [];
+
+            // Filter daily data by period
+            function filterByPeriod(priceData, volumeData, period) {
+                const now = new Date();
+                let cutoff;
+
+                switch (period) {
+                    case '1m':
+                        cutoff = new Date(now.setMonth(now.getMonth() - 1));
+                        break;
+                    case '6m':
+                        cutoff = new Date(now.setMonth(now.getMonth() - 6));
+                        break;
+                    case '1y':
+                        cutoff = new Date(now.setFullYear(now.getFullYear() - 1));
+                        break;
+                    case '5y':
+                        cutoff = new Date(now.setFullYear(now.getFullYear() - 5));
+                        break;
+                    case 'max':
+                    default:
+                        return { priceData, volumeData };
+                }
+
+                const cutoffStr = cutoff.toISOString().split('T')[0];
+                const filteredPrice = priceData.filter(d => d.time >= cutoffStr);
+                const filteredVolume = volumeData.filter(d => d.time >= cutoffStr);
+
+                return { priceData: filteredPrice, volumeData: filteredVolume };
+            }
+
+            // Create/update chart
+            function createChart(priceData, volumeData, chartType, isIntraday = false) {
+                if (chart) {
+                    chart.remove();
+                }
+
+                chart = LightweightCharts.createChart(container, {
+                    layout: {
+                        background: { type: 'solid', color: '#ffffff' },
+                        textColor: '#333',
+                    },
+                    grid: {
+                        vertLines: { color: '#f0f0f0' },
+                        horzLines: { color: '#f0f0f0' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Magnet,
+                    },
+                    handleScroll: false,
+                    handleScale: false,
+                    rightPriceScale: {
+                        borderColor: '#e0e0e0',
+                        scaleMargins: {
+                            top: 0.1,
+                            bottom: 0.25,
+                        },
+                    },
+                    timeScale: {
+                        borderColor: '#e0e0e0',
+                        timeVisible: isIntraday,
+                    },
+                });
+
+                // Price series
+                if (chartType === 'candlestick') {
+                    const priceSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+                        upColor: '#26a69a',
+                        downColor: '#ef5350',
+                        borderUpColor: '#26a69a',
+                        borderDownColor: '#ef5350',
+                        wickUpColor: '#26a69a',
+                        wickDownColor: '#ef5350',
+                    });
+                    priceSeries.setData(priceData);
+                } else {
+                    const lineData = priceData.map(d => ({ time: d.time, value: d.close }));
+                    const priceSeries = chart.addSeries(LightweightCharts.LineSeries, {
+                        color: '#2962FF',
+                        lineWidth: 2,
+                    });
+                    priceSeries.setData(lineData);
+                }
+
+                // Volume series
+                const volumeSeries = chart.addSeries(LightweightCharts.HistogramSeries, {
+                    priceFormat: { type: 'volume' },
+                    priceScaleId: 'volume',
+                });
+                chart.priceScale('volume').applyOptions({
+                    scaleMargins: { top: 0.85, bottom: 0 },
+                });
+                volumeSeries.setData(volumeData);
+
+                chart.timeScale().fitContent();
+            }
+
+            // Fetch intraday data
+            async function fetchIntraday(period) {
+                try {
+                    const response = await fetch(`/companies/${ticker}/prices/${period}/`);
+                    const data = await response.json();
+                    if (data.error) {
+                        console.error(data.error);
+                        return null;
+                    }
+                    return data;
+                } catch (e) {
+                    console.error(e);
+                    return null;
+                }
+            }
+
+            // Update chart based on period
+            async function updatePeriod(period) {
+                currentPeriod = period;
+
+                // Update button styles
+                document.querySelectorAll('.period-btn').forEach(btn => {
+                    btn.classList.remove('bg-blue-100', 'border-blue-500');
+                    if (btn.dataset.period === period) {
+                        btn.classList.add('bg-blue-100', 'border-blue-500');
+                    }
+                });
+
+                if (period === '1d' || period === '5d') {
+                    // Fetch intraday data
+                    const data = await fetchIntraday(period);
+                    if (data && data.price_data.length > 0) {
+                        currentPriceData = data.price_data;
+                        currentVolumeData = data.volume_data;
+                        createChart(currentPriceData, currentVolumeData, currentChartType, true);
+                    }
+                } else {
+                    // Filter daily data
+                    const filtered = filterByPeriod(allPriceData, allVolumeData, period);
+                    currentPriceData = filtered.priceData;
+                    currentVolumeData = filtered.volumeData;
+                    createChart(currentPriceData, currentVolumeData, currentChartType, false);
+                }
+            }
+
+            // Period button handlers
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', () => updatePeriod(btn.dataset.period));
+            });
+
+            // Chart type toggle
+            const chartTypeSelect = document.getElementById('chart-type');
+            if (chartTypeSelect) {
+                chartTypeSelect.addEventListener('change', function() {
+                    currentChartType = this.value;
+                    const isIntraday = currentPeriod === '1d' || currentPeriod === '5d';
+                    createChart(currentPriceData, currentVolumeData, currentChartType, isIntraday);
+                });
+            }
+
+            // Resize handler
+            new ResizeObserver(entries => {
+                if (entries.length === 0 || entries[0].target !== container || !chart) return;
+                const { width, height } = entries[0].contentRect;
+                chart.applyOptions({ width, height });
+            }).observe(container);
+
+            // Initial load (1Y)
+            updatePeriod('1y');
+        })();
+    </script>
 
     <script>
         // Table toggle

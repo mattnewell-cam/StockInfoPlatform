@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Follow, Filing, Financial
+from .models import Company, Follow, Filing, Financial, StockPrice
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -16,3 +16,9 @@ class CompanyAdmin(admin.ModelAdmin):
 
 admin.site.register(Follow)
 admin.site.register(Filing)
+
+@admin.register(StockPrice)
+class StockPriceAdmin(admin.ModelAdmin):
+    list_display = ("company", "date", "open", "high", "low", "close", "volume")
+    list_filter = ("company",)
+    date_hierarchy = "date"

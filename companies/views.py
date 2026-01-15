@@ -1,8 +1,11 @@
 from django.shortcuts import render
 from django.views.generic import DetailView
+from django.http import JsonResponse
 from collections import defaultdict
+import json
+import yfinance as yf
 
-from companies.models import Company, Financial
+from companies.models import Company, Financial, StockPrice
 
 
 METRICS_IS = [
@@ -126,5 +129,82 @@ class CompanyDetailView(DetailView):
         ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
         ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
         ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
+
+        # Price data for chart
+        prices = StockPrice.objects.filter(company=self.object).order_by('date')
+        price_data = [
+            {
+                "time": p.date.isoformat(),
+                "open": float(p.open),
+                "high": float(p.high),
+                "low": float(p.low),
+                "close": float(p.close),
+            }
+            for p in prices
+        ]
+        volume_data = [
+            {
+                "time": p.date.isoformat(),
+                "value": p.volume,
+                "color": "#26a69a" if p.close >= p.open else "#ef5350"
+            }
+            for p in prices
+        ]
+        ctx["price_data_json"] = json.dumps(price_data)
+        ctx["volume_data_json"] = json.dumps(volume_data)
+
         return ctx
+
+
+def intraday_prices(request, ticker, period):
+    """Fetch intraday prices from yfinance for 1D/5D views."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    yf_ticker = yf.Ticker(f"{ticker}.L")
+
+    # Map period to yfinance parameters
+    period_config = {
+        "1d": {"period": "1d", "interval": "5m"},
+        "5d": {"period": "5d", "interval": "15m"},
+    }
+
+    if period not in period_config:
+        return JsonResponse({"error": "Invalid period"}, status=400)
+
+    config = period_config[period]
+
+    try:
+        df = yf_ticker.history(period=config["period"], interval=config["interval"])
+
+        if df.empty:
+            return JsonResponse({"price_data": [], "volume_data": []})
+
+        price_data = []
+        volume_data = []
+
+        for idx, row in df.iterrows():
+            # Convert to Unix timestamp for Lightweight Charts
+            timestamp = int(idx.timestamp())
+
+            price_data.append({
+                "time": timestamp,
+                "open": float(row["Open"]),
+                "high": float(row["High"]),
+                "low": float(row["Low"]),
+                "close": float(row["Close"]),
+            })
+
+            volume_data.append({
+                "time": timestamp,
+                "value": int(row["Volume"]),
+                "color": "#26a69a" if row["Close"] >= row["Open"] else "#ef5350"
+            })
+
+        return JsonResponse({"price_data": price_data, "volume_data": volume_data})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 

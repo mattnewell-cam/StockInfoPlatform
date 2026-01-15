@@ -165,3 +165,28 @@ class Financial(models.Model):
 
     def __str__(self) -> str:
         return f"{self.company.ticker} {self.period_end_date} {self.metric} {self.value}"
+
+
+class StockPrice(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="prices")
+    date = models.DateField()
+    open = models.DecimalField(max_digits=12, decimal_places=4)
+    high = models.DecimalField(max_digits=12, decimal_places=4)
+    low = models.DecimalField(max_digits=12, decimal_places=4)
+    close = models.DecimalField(max_digits=12, decimal_places=4)
+    volume = models.BigIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "date"],
+                name="uniq_company_date_price"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["company", "date"])
+        ]
+        ordering = ["date"]
+
+    def __str__(self) -> str:
+        return f"{self.company.ticker} {self.date} {self.close}"
