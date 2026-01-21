@@ -214,16 +214,16 @@ class Note(models.Model):
 
 class EmailVerificationToken(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_verification")
-    token = models.CharField(max_length=64, unique=True)
+    code = models.CharField(max_length=6, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        if not self.token:
-            self.token = secrets.token_urlsafe(32)
+        if not self.code:
+            self.code = str(secrets.randbelow(900000) + 100000)  # 6 digits
         super().save(*args, **kwargs)
 
     def is_expired(self):
-        return timezone.now() > self.created_at + timezone.timedelta(hours=24)
+        return timezone.now() > self.created_at + timezone.timedelta(minutes=15)
 
     def __str__(self):
         return f"Verification for {self.user.email}"

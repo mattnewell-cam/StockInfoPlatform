@@ -9,9 +9,120 @@ from django.contrib import messages
 from collections import defaultdict
 import json
 import yfinance as yf
+import requests
 
 from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken
 from companies.utils import send_verification_email
+from django.db.models import Q
+
+
+def home(request):
+    return render(request, 'companies/home.html')
+
+
+def search_api(request):
+    q = request.GET.get('q', '').strip()
+    if not q:
+        return JsonResponse([], safe=False)
+    results = Company.objects.filter(Q(name__icontains=q) | Q(ticker__icontains=q))[:10]
+    return JsonResponse([{'ticker': c.ticker, 'name': c.name} for c in results], safe=False)
+
+
+def regulatory_newsfeed(request, ticker):
+    """Fetch FCA NSM filings for a company (paged)."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    def clamp_int(raw, default, min_value, max_value):
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = default
+        return max(min_value, min(value, max_value))
+
+    types_param = request.GET.get("types", "").strip()
+    size = clamp_int(request.GET.get("size"), 20, 1, 200)
+    offset = clamp_int(request.GET.get("from"), 0, 0, 10000)
+
+    criteria = [{"name": "latest_flag", "value": "Y"}]
+    company_name = getattr(company, "name", "") or ""
+    if company_name:
+        criteria.append({
+            "name": "company_lei",
+            "value": [company_name, "", "disclose_org", "related_org"],
+        })
+
+    payload = {
+        "from": offset,
+        "size": size,
+        "sort": "submitted_date",
+        "sortorder": "desc",
+        "criteriaObj": {
+            "criteria": criteria,
+        },
+    }
+
+    url = "https://api.data.fca.org.uk/search"
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "Origin": "https://data.fca.org.uk",
+        "Referer": "https://data.fca.org.uk/",
+    }
+    params = {"index": "fca-nsm-searchdata"}
+
+    try:
+        resp = requests.post(url=url, headers=headers, params=params, json=payload, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return JsonResponse({"error": "Failed to fetch FCA newsfeed", "detail": str(exc)}, status=502)
+
+    data = resp.json()
+    hits = data.get("hits", {}).get("hits", [])
+
+    selected_types = [t.strip() for t in types_param.split(",") if t.strip()]
+    selected_types_lower = {t.lower() for t in selected_types}
+
+    items = []
+    available_types = set()
+    for hit in hits:
+        info = hit.get("_source", {})
+        rns_type = info.get("type", "") or ""
+        if rns_type:
+            available_types.add(rns_type)
+        if selected_types_lower:
+            if not rns_type or rns_type.lower() not in selected_types_lower:
+                continue
+
+        download_link = info.get("download_link", "") or ""
+        items.append({
+            "type": rns_type,
+            "headline": info.get("title")
+            or info.get("headline")
+            or info.get("document_title")
+            or "",
+            "company_name": info.get("company_name") or info.get("name") or "",
+            "submitted_date": info.get("submitted_date") or info.get("published_date") or "",
+            "download_url": f"https://data.fca.org.uk/artefacts/{download_link}" if download_link else "",
+        })
+
+    total_hits = data.get("hits", {}).get("total", {})
+    total_count = None
+    if isinstance(total_hits, dict):
+        total_count = total_hits.get("value")
+    elif isinstance(total_hits, int):
+        total_count = total_hits
+
+    return JsonResponse({
+        "items": items,
+        "types": sorted(available_types),
+        "company_filter_applied": bool(company_name),
+        "offset": offset,
+        "size": size,
+        "total": total_count,
+    })
 
 
 METRICS_IS = [
@@ -271,13 +382,12 @@ def signup(request):
 
         errors = []
 
-        # Allow re-registration if previous attempt didn't verify
         existing = User.objects.filter(email=email).first()
         if existing:
             if existing.is_active:
                 errors.append("An account with this email already exists.")
             else:
-                existing.delete()  # Clear unverified attempt
+                existing.delete()
 
         if not email:
             errors.append("Email is required.")
@@ -292,36 +402,42 @@ def signup(request):
         user = User.objects.create_user(username=email, email=email, password=password, is_active=False)
         token = EmailVerificationToken.objects.create(user=user)
 
-        verification_url = request.build_absolute_uri(f'/verify/{token.token}/')
-        if not send_verification_email(email, verification_url):
+        if not send_verification_email(email, token.code):
             user.delete()
             return render(request, 'registration/signup.html', {'errors': ["Failed to send email."], 'email': email})
 
-        return render(request, 'registration/signup_done.html', {'email': email})
+        request.session['verify_email'] = email
+        return redirect('verify_email')
 
     return render(request, 'registration/signup.html')
 
 
-def verify_email(request, token):
-    """Verify email address from token."""
-    try:
-        verification = EmailVerificationToken.objects.select_related('user').get(token=token)
-    except EmailVerificationToken.DoesNotExist:
-        return render(request, 'registration/verify_failed.html', {
-            'error': 'Invalid verification link.'
-        })
+def verify_email(request):
+    """Verify email with 6-digit code."""
+    email = request.session.get('verify_email')
+    if not email:
+        return redirect('signup')
 
-    if verification.is_expired():
-        return render(request, 'registration/verify_failed.html', {
-            'error': 'This verification link has expired. Please sign up again.'
-        })
+    error = None
+    if request.method == 'POST':
+        code = request.POST.get('code', '').strip()
+        try:
+            verification = EmailVerificationToken.objects.select_related('user').get(user__email=email)
+            if verification.is_expired():
+                verification.user.delete()
+                error = "Code expired. Please sign up again."
+            elif verification.code != code:
+                error = "Invalid code."
+            else:
+                user = verification.user
+                user.is_active = True
+                user.save()
+                verification.delete()
+                del request.session['verify_email']
+                login(request, user)
+                return redirect('/')
+        except EmailVerificationToken.DoesNotExist:
+            error = "No pending verification. Please sign up again."
 
-    user = verification.user
-    user.is_active = True
-    user.save()
-    verification.delete()
-
-    login(request, user)
-    messages.success(request, 'Your email has been verified. Welcome!')
-    return redirect('/')
+    return render(request, 'registration/verify_code.html', {'email': email, 'error': error})
 

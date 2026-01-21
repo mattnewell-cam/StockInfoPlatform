@@ -164,6 +164,37 @@
             </ul>
         </div>
         {% endif %}
+
+        <!-- Regulatory Newsfeed -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 class="text-lg font-semibold text-gray-900">Regulatory Newsfeed</h2>
+            </div>
+            <div class="mb-3 relative">
+                <button id="news-type-toggle" class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100">
+                    Filter types
+                </button>
+                <div id="news-type-dropdown" class="absolute z-10 mt-2 w-72 rounded-md border border-gray-200 bg-white shadow-lg p-3 hidden">
+                    <div class="flex items-center gap-2 mb-2">
+                        <input id="news-type-all" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <label for="news-type-all" class="text-sm font-medium text-gray-700">Select all</label>
+                    </div>
+                    <div id="news-type-filter" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <p id="news-meta" class="text-xs text-gray-500">Loading latest filings...</p>
+                <div class="flex items-center gap-2">
+                    <button id="news-prev" class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Prev
+                    </button>
+                    <button id="news-next" class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Next
+                    </button>
+                </div>
+            </div>
+            <div id="news-list" class="space-y-3 max-h-96 overflow-y-auto pr-1"></div>
+        </div>
     </div>
 
     <!-- Chart initialization -->
@@ -444,5 +475,178 @@
         })();
     </script>
     {% endif %}
+
+    <script>
+        (function() {
+            const newsList = document.getElementById('news-list');
+            const newsMeta = document.getElementById('news-meta');
+            const typeFilter = document.getElementById('news-type-filter');
+            const typeSelectAll = document.getElementById('news-type-all');
+            const prevBtn = document.getElementById('news-prev');
+            const nextBtn = document.getElementById('news-next');
+            const typeToggle = document.getElementById('news-type-toggle');
+            const typeDropdown = document.getElementById('news-type-dropdown');
+            if (!newsList || !newsMeta || !typeFilter || !typeSelectAll || !prevBtn || !nextBtn || !typeToggle || !typeDropdown) return;
+
+            const endpoint = `/companies/{{ company.ticker }}/news/`;
+            const pageSize = 20;
+            let allTypes = [];
+            let offset = 0;
+            let total = null;
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function formatDate(value) {
+                if (!value) return '';
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return value;
+                return date.toLocaleString();
+            }
+
+            function renderItems(items) {
+                if (!items.length) {
+                    newsList.innerHTML = '<p class="text-sm text-gray-500">No filings found.</p>';
+                    return;
+                }
+
+                newsList.innerHTML = items.map(item => {
+                    const headline = escapeHtml(item.headline || 'Untitled filing');
+                    const companyName = escapeHtml(item.company_name || '');
+                    const submitted = escapeHtml(formatDate(item.submitted_date));
+                    const type = escapeHtml(item.type || '');
+                    const link = item.download_url
+                        ? `<a class="text-blue-600 hover:text-blue-800 text-sm hover:underline" href="${escapeHtml(item.download_url)}" target="_blank" rel="noopener">View document</a>`
+                        : '<span class="text-gray-400 text-sm">No document link</span>';
+
+                    return `
+                        <div class="border-b border-gray-100 pb-3">
+                            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 mb-1">
+                                ${type ? `<span class="font-medium text-gray-700">${type}</span>` : ''}
+                                ${submitted ? `<span>${submitted}</span>` : ''}
+                                ${companyName ? `<span>${companyName}</span>` : ''}
+                            </div>
+                            <p class="text-sm text-gray-900 mb-2">${headline}</p>
+                            ${link}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function updateTypeOptions(types, selectedValues) {
+                const uniqueTypes = Array.from(new Set(types)).sort();
+                allTypes = uniqueTypes;
+                typeFilter.innerHTML = uniqueTypes.map(value => {
+                    const id = `news-type-${value.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+                    const checked = selectedValues.has(value) ? 'checked' : '';
+                    return `
+                        <label for="${escapeHtml(id)}" class="flex items-center gap-2 text-sm text-gray-700">
+                            <input id="${escapeHtml(id)}" type="checkbox" value="${escapeHtml(value)}" ${checked}
+                                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 news-type-option">
+                            ${escapeHtml(value)}
+                        </label>
+                    `;
+                }).join('');
+                const allSelected = uniqueTypes.length > 0 && uniqueTypes.every(value => selectedValues.has(value));
+                typeSelectAll.checked = allSelected;
+                typeSelectAll.disabled = uniqueTypes.length === 0;
+            }
+
+            function updatePagerState(itemCount) {
+                prevBtn.disabled = offset === 0;
+                if (typeof total === 'number') {
+                    nextBtn.disabled = offset + pageSize >= total;
+                } else {
+                    nextBtn.disabled = itemCount < pageSize;
+                }
+            }
+
+            function updateMeta(itemCount) {
+                const start = offset + 1;
+                const end = offset + itemCount;
+                const totalLabel = typeof total === 'number' ? ` of ${total}` : '';
+                const scopeNote = '';
+                if (itemCount === 0) {
+                    newsMeta.textContent = `No filings found.${totalLabel ? ` Total${totalLabel}.` : ''} ${scopeNote}`;
+                    return;
+                }
+                newsMeta.textContent = `Showing ${start}-${end}${totalLabel}. ${scopeNote}`;
+            }
+
+            async function loadNews(resetOffset) {
+                const selectedValues = new Set(
+                    Array.from(typeFilter.querySelectorAll('input.news-type-option:checked'))
+                        .map(input => input.value)
+                );
+                if (resetOffset) {
+                    offset = 0;
+                }
+                newsMeta.textContent = 'Loading latest filings...';
+
+                const url = new URL(endpoint, window.location.origin);
+                url.searchParams.set('size', String(pageSize));
+                url.searchParams.set('from', String(offset));
+                if (selectedValues.size) {
+                    url.searchParams.set('types', Array.from(selectedValues).join(','));
+                }
+
+                try {
+                    const response = await fetch(url.toString());
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to load filings');
+                    }
+
+                    total = typeof data.total === 'number' ? data.total : null;
+                    updateTypeOptions(data.types || [], selectedValues);
+                    renderItems(data.items || []);
+                    updateMeta((data.items || []).length);
+                    updatePagerState((data.items || []).length);
+                } catch (error) {
+                    console.error(error);
+                    newsMeta.textContent = 'Failed to load filings.';
+                    newsList.innerHTML = '<p class="text-sm text-gray-500">Try again later.</p>';
+                    prevBtn.disabled = true;
+                    nextBtn.disabled = true;
+                }
+            }
+
+            typeFilter.addEventListener('change', function() {
+                loadNews(true);
+            });
+            typeSelectAll.addEventListener('change', function() {
+                const shouldSelectAll = typeSelectAll.checked;
+                typeFilter.querySelectorAll('input.news-type-option').forEach(input => {
+                    input.checked = shouldSelectAll;
+                });
+                loadNews(true);
+            });
+            typeToggle.addEventListener('click', function() {
+                typeDropdown.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function(event) {
+                if (!typeDropdown.contains(event.target) && !typeToggle.contains(event.target)) {
+                    typeDropdown.classList.add('hidden');
+                }
+            });
+            prevBtn.addEventListener('click', function() {
+                if (offset === 0) return;
+                offset = Math.max(0, offset - pageSize);
+                loadNews(false);
+            });
+            nextBtn.addEventListener('click', function() {
+                offset = offset + pageSize;
+                loadNews(false);
+            });
+            loadNews(true);
+        })();
+    </script>
 </body>
 </html>

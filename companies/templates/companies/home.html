@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrackStack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-2xl mx-auto pt-20 px-4">
+        <h1 class="text-4xl font-bold text-center text-gray-900 mb-8">TrackStack</h1>
+
+        <input type="text" id="search" placeholder="Search by name or ticker..." autofocus
+               class="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:border-blue-500 focus:ring-blue-500">
+
+        <ul id="results" class="bg-white rounded-lg shadow divide-y mt-2 hidden"></ul>
+
+    <script>
+        const input = document.getElementById('search');
+        const results = document.getElementById('results');
+
+        input.addEventListener('input', async () => {
+            const q = input.value.trim();
+            if (q.length < 1) { results.classList.add('hidden'); return; }
+
+            const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+            const data = await res.json();
+
+            if (data.length === 0) { results.classList.add('hidden'); return; }
+
+            results.innerHTML = data.map(c =>
+                `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                    <span class="font-medium text-gray-900">${c.ticker}</span>
+                    <span class="text-gray-500">${c.name}</span>
+                </a></li>`
+            ).join('');
+            results.classList.remove('hidden');
+        });
+    </script>
+    </div>
+</body>
+</html>

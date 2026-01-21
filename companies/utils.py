@@ -8,8 +8,8 @@ def end_of_month(year:int, month) -> dt.date:
     return dt.date(year, month, last_day)
 
 
-def send_verification_email(to_email: str, verification_url: str) -> bool:
-    """Send verification email via Brevo API."""
+def send_verification_email(to_email: str, code: str) -> bool:
+    """Send verification code via Brevo API."""
     api_key = os.getenv("EMAIL_API_KEY")
     if not api_key:
         return False
@@ -21,8 +21,8 @@ def send_verification_email(to_email: str, verification_url: str) -> bool:
             json={
                 "sender": {"name": "TrackStack", "email": "verify@trackstack.uk"},
                 "to": [{"email": to_email}],
-                "subject": "Verify your TrackStack account",
-                "htmlContent": f'<p>Click to verify: <a href="{verification_url}">{verification_url}</a></p>',
+                "subject": "Your TrackStack verification code",
+                "htmlContent": f'<p>Your verification code is: <strong>{code}</strong></p><p>Expires in 15 minutes.</p>',
             },
         )
         return response.status_code == 201
