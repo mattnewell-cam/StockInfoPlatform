@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(python manage.py makemigrations:*)",
-      "Bash(python3 manage.py makemigrations:*)"
+      "Bash(python3 manage.py makemigrations:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venv/Scripts/pip.exe install:*)"
     ]
   }
 }

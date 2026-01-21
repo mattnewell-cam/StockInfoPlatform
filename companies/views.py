@@ -1,11 +1,17 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.views.generic import DetailView
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.contrib.auth import login
+from django.contrib import messages
 from collections import defaultdict
 import json
 import yfinance as yf
 
-from companies.models import Company, Financial, StockPrice
+from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken
+from companies.utils import send_verification_email
 
 
 METRICS_IS = [
@@ -153,6 +159,13 @@ class CompanyDetailView(DetailView):
         ctx["price_data_json"] = json.dumps(price_data)
         ctx["volume_data_json"] = json.dumps(volume_data)
 
+        # Notes for logged-in users
+        if self.request.user.is_authenticated:
+            notes = Note.objects.filter(user=self.request.user, company=self.object)
+            ctx["notes"] = notes
+        else:
+            ctx["notes"] = []
+
         return ctx
 
 
@@ -207,4 +220,108 @@ def intraday_prices(request, ticker, period):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def add_note(request, ticker):
+    """Add a note for a company."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title", "").strip()
+        content = data.get("content", "").strip()
+
+        if not content:
+            return JsonResponse({"error": "Content is required"}, status=400)
+
+        note = Note.objects.create(
+            user=request.user,
+            company=company,
+            title=title,
+            content=content
+        )
+
+        return JsonResponse({
+            "id": note.id,
+            "title": note.title,
+            "content": note.content,
+            "created_at": note.created_at.strftime("%d/%m/%Y, %I:%M %p")
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def signup(request):
+    """Handle user registration with email verification."""
+    if request.user.is_authenticated:
+        return redirect('/')
+
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
+        password_confirm = request.POST.get('password_confirm', '')
+
+        errors = []
+
+        # Allow re-registration if previous attempt didn't verify
+        existing = User.objects.filter(email=email).first()
+        if existing:
+            if existing.is_active:
+                errors.append("An account with this email already exists.")
+            else:
+                existing.delete()  # Clear unverified attempt
+
+        if not email:
+            errors.append("Email is required.")
+        if not password or len(password) < 8:
+            errors.append("Password must be at least 8 characters.")
+        elif password != password_confirm:
+            errors.append("Passwords do not match.")
+
+        if errors:
+            return render(request, 'registration/signup.html', {'errors': errors, 'email': email})
+
+        user = User.objects.create_user(username=email, email=email, password=password, is_active=False)
+        token = EmailVerificationToken.objects.create(user=user)
+
+        verification_url = request.build_absolute_uri(f'/verify/{token.token}/')
+        if not send_verification_email(email, verification_url):
+            user.delete()
+            return render(request, 'registration/signup.html', {'errors': ["Failed to send email."], 'email': email})
+
+        return render(request, 'registration/signup_done.html', {'email': email})
+
+    return render(request, 'registration/signup.html')
+
+
+def verify_email(request, token):
+    """Verify email address from token."""
+    try:
+        verification = EmailVerificationToken.objects.select_related('user').get(token=token)
+    except EmailVerificationToken.DoesNotExist:
+        return render(request, 'registration/verify_failed.html', {
+            'error': 'Invalid verification link.'
+        })
+
+    if verification.is_expired():
+        return render(request, 'registration/verify_failed.html', {
+            'error': 'This verification link has expired. Please sign up again.'
+        })
+
+    user = verification.user
+    user.is_active = True
+    user.save()
+    verification.delete()
+
+    login(request, user)
+    messages.success(request, 'Your email has been verified. Welcome!')
+    return redirect('/')
 

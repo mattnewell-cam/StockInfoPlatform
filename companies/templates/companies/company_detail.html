@@ -17,6 +17,21 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div></div>
+            <div>
+                {% if user.is_authenticated %}
+                    <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
+                    <a href="{% url 'logout' %}" class="text-sm text-blue-600 hover:text-blue-800">Logout</a>
+                {% else %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
     <div class="max-w-7xl mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">{{ company.name }} ({{ company.ticker }})</h1>
 
@@ -56,25 +71,72 @@
         </div>
         {% endif %}
 
-        <!-- Financial Statements Card -->
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <div class="flex items-center gap-4 mb-4">
-                <label for="stmt" class="text-sm font-medium text-gray-700">Statement</label>
-                <select id="stmt" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
-                    <option value="IS">Income Statement</option>
-                    <option value="BS">Balance Sheet</option>
-                    <option value="CF">Cash Flow</option>
-                </select>
+        <!-- Financials + Notes Row -->
+        <div class="grid grid-cols-3 gap-6 mb-6">
+            <!-- Financial Statements Card (2/3) -->
+            <div class="col-span-2 bg-white rounded-lg shadow p-6">
+                <div class="flex items-center gap-4 mb-4">
+                    <label for="stmt" class="text-sm font-medium text-gray-700">Statement</label>
+                    <select id="stmt" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
+                        <option value="IS">Income Statement</option>
+                        <option value="BS">Balance Sheet</option>
+                        <option value="CF">Cash Flow</option>
+                    </select>
+                </div>
+
+                <div id="table-is">
+                    {% include "companies/statement_table.html" with table=IS_table %}
+                </div>
+                <div id="table-bs" style="display: none;">
+                    {% include "companies/statement_table.html" with table=BS_table %}
+                </div>
+                <div id="table-cf" style="display: none;">
+                    {% include "companies/statement_table.html" with table=CF_table %}
+                </div>
             </div>
 
-            <div id="table-is">
-                {% include "companies/statement_table.html" with table=IS_table %}
-            </div>
-            <div id="table-bs" style="display: none;">
-                {% include "companies/statement_table.html" with table=BS_table %}
-            </div>
-            <div id="table-cf" style="display: none;">
-                {% include "companies/statement_table.html" with table=CF_table %}
+            <!-- Notes Card (1/3) -->
+            <div class="col-span-1 bg-white rounded-lg shadow p-6 flex flex-col relative" style="height: 500px;">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">Notes</h2>
+
+                {% if user.is_authenticated %}
+                <!-- Notes Form -->
+                <div class="flex-shrink-0 mb-4">
+                    <input type="text" id="note-title" placeholder="Title (optional)"
+                           class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500">
+                    <textarea id="note-content" placeholder="Write a note..." rows="2"
+                              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500 resize-none"></textarea>
+                    <button id="add-note-btn" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 w-full">
+                        Add Note
+                    </button>
+                </div>
+
+                <!-- Notes List -->
+                <div id="notes-list" class="overflow-y-auto flex-grow space-y-3">
+                    {% for note in notes %}
+                    <div class="border-b border-gray-100 pb-3">
+                        {% if note.title %}
+                        <h3 class="font-medium text-gray-900 text-sm">{{ note.title }}</h3>
+                        {% endif %}
+                        <p class="text-gray-700 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+                        <span class="text-xs text-gray-400">{{ note.created_at|date:"d/m/Y, g:i A" }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-gray-400 text-sm" id="no-notes-msg">No notes yet.</p>
+                    {% endfor %}
+                </div>
+
+                {% else %}
+                <!-- Blurred state for logged out users -->
+                <div class="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                    <div class="text-center">
+                        <p class="text-gray-600 mb-3">Log in to view and add notes</p>
+                        <a href="{% url 'login' %}?next={{ request.path }}" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">
+                            Login
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -122,7 +184,6 @@
             let currentPriceData = [];
             let currentVolumeData = [];
 
-            // Filter daily data by period
             function filterByPeriod(priceData, volumeData, period) {
                 const now = new Date();
                 let cutoff;
@@ -152,7 +213,6 @@
                 return { priceData: filteredPrice, volumeData: filteredVolume };
             }
 
-            // Create/update chart
             function createChart(priceData, volumeData, chartType, isIntraday = false) {
                 if (chart) {
                     chart.remove();
@@ -185,7 +245,6 @@
                     },
                 });
 
-                // Price series
                 if (chartType === 'candlestick') {
                     const priceSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
                         upColor: '#26a69a',
@@ -205,7 +264,6 @@
                     priceSeries.setData(lineData);
                 }
 
-                // Volume series
                 const volumeSeries = chart.addSeries(LightweightCharts.HistogramSeries, {
                     priceFormat: { type: 'volume' },
                     priceScaleId: 'volume',
@@ -218,7 +276,6 @@
                 chart.timeScale().fitContent();
             }
 
-            // Fetch intraday data
             async function fetchIntraday(period) {
                 try {
                     const response = await fetch(`/companies/${ticker}/prices/${period}/`);
@@ -234,11 +291,9 @@
                 }
             }
 
-            // Update chart based on period
             async function updatePeriod(period) {
                 currentPeriod = period;
 
-                // Update button styles
                 document.querySelectorAll('.period-btn').forEach(btn => {
                     btn.classList.remove('bg-blue-100', 'border-blue-500');
                     if (btn.dataset.period === period) {
@@ -247,7 +302,6 @@
                 });
 
                 if (period === '1d' || period === '5d') {
-                    // Fetch intraday data
                     const data = await fetchIntraday(period);
                     if (data && data.price_data.length > 0) {
                         currentPriceData = data.price_data;
@@ -255,7 +309,6 @@
                         createChart(currentPriceData, currentVolumeData, currentChartType, true);
                     }
                 } else {
-                    // Filter daily data
                     const filtered = filterByPeriod(allPriceData, allVolumeData, period);
                     currentPriceData = filtered.priceData;
                     currentVolumeData = filtered.volumeData;
@@ -263,12 +316,10 @@
                 }
             }
 
-            // Period button handlers
             document.querySelectorAll('.period-btn').forEach(btn => {
                 btn.addEventListener('click', () => updatePeriod(btn.dataset.period));
             });
 
-            // Chart type toggle
             const chartTypeSelect = document.getElementById('chart-type');
             if (chartTypeSelect) {
                 chartTypeSelect.addEventListener('change', function() {
@@ -278,14 +329,12 @@
                 });
             }
 
-            // Resize handler
             new ResizeObserver(entries => {
                 if (entries.length === 0 || entries[0].target !== container || !chart) return;
                 const { width, height } = entries[0].contentRect;
                 chart.applyOptions({ width, height });
             }).observe(container);
 
-            // Initial load (1Y)
             updatePeriod('1y');
         })();
     </script>
@@ -328,5 +377,72 @@
         renderMarkdown('special-sits-content', "{{ company.special_sits|escapejs }}");
         {% endif %}
     </script>
+
+    {% if user.is_authenticated %}
+    <script>
+        // Notes functionality
+        (function() {
+            const ticker = "{{ company.ticker }}";
+            const addBtn = document.getElementById('add-note-btn');
+            const titleInput = document.getElementById('note-title');
+            const contentInput = document.getElementById('note-content');
+            const notesList = document.getElementById('notes-list');
+            const noNotesMsg = document.getElementById('no-notes-msg');
+
+            if (!addBtn) return;
+
+            addBtn.addEventListener('click', async function() {
+                const title = titleInput.value.trim();
+                const content = contentInput.value.trim();
+
+                if (!content) {
+                    alert('Please enter a note.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/companies/${ticker}/notes/add/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ title, content })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Remove "no notes" message if present
+                        if (noNotesMsg) {
+                            noNotesMsg.remove();
+                        }
+
+                        // Create new note element
+                        const noteEl = document.createElement('div');
+                        noteEl.className = 'border-b border-gray-100 pb-3';
+                        noteEl.innerHTML = `
+                            ${data.title ? `<h3 class="font-medium text-gray-900 text-sm">${data.title}</h3>` : ''}
+                            <p class="text-gray-700 text-sm whitespace-pre-wrap">${data.content}</p>
+                            <span class="text-xs text-gray-400">${data.created_at}</span>
+                        `;
+
+                        // Insert at top of notes list
+                        notesList.insertBefore(noteEl, notesList.firstChild);
+
+                        // Clear inputs
+                        titleInput.value = '';
+                        contentInput.value = '';
+                    } else {
+                        alert(data.error || 'Failed to add note.');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Failed to add note.');
+                }
+            });
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>

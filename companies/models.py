@@ -1,7 +1,10 @@
 from logging import lastResort
+import secrets
 
 from django.db import models
 from django.conf import settings
+from django.contrib.auth.models import User
+from django.utils import timezone
 from companies.utils import end_of_month
 
 class Company(models.Model):
@@ -190,3 +193,37 @@ class StockPrice(models.Model):
 
     def __str__(self) -> str:
         return f"{self.company.ticker} {self.date} {self.close}"
+
+
+class Note(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notes")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="notes")
+    title = models.CharField(max_length=255, blank=True, default="")
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "company", "-created_at"])
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.company.ticker}: {self.title or 'Untitled'}"
+
+
+class EmailVerificationToken(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_verification")
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + timezone.timedelta(hours=24)
+
+    def __str__(self):
+        return f"Verification for {self.user.email}"
