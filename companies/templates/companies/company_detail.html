@@ -19,9 +19,22 @@
 <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
     <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div></div>
-            <div>
+        <div class="w-full px-6 py-3 flex justify-between items-center gap-6">
+            <a href="/" class="flex items-center gap-2 text-gray-900 hover:text-blue-700">
+                <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 121.01 122.88" aria-hidden="true">
+                    <path d="M86.32,110,108.8,86.38H86.32V110ZM35.61,86.34a3.66,3.66,0,1,1,0-7.31H60a3.66,3.66,0,1,1,0,7.31Zm0-24.66a3.66,3.66,0,1,1,0-7.32H85.13a3.66,3.66,0,1,1,0,7.32Zm0-24.67a3.66,3.66,0,1,1,0-7.31H85.13a3.66,3.66,0,1,1,0,7.31Zm77.73,42V7.35H7.35V115.29H79V82.71A3.68,3.68,0,0,1,82.65,79ZM87,120a5.1,5.1,0,0,1-4.31,2.9,3.58,3.58,0,0,1-1.31-.24h-74a7.25,7.25,0,0,1-4.87-1.88l-.3-.26A7.29,7.29,0,0,1,0,115.33V7.31A7.31,7.31,0,0,1,7.31,0H113.39a7.32,7.32,0,0,1,7.3,7.31V81.2a3.66,3.66,0,0,1-.68,4L87,120Z"/>
+                </svg>
+                <span class="text-lg font-semibold">TrackStack</span>
+            </a>
+            <div class="flex items-center gap-6 flex-1 max-w-3xl">
+                <div class="relative w-full">
+                    <input type="text" id="header-search" placeholder="Search by name or ticker..."
+                           class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <ul id="header-results" class="absolute z-10 bg-white rounded-lg shadow divide-y mt-2 w-full hidden"></ul>
+                </div>
+                <a href="/notes/" class="text-sm font-medium text-gray-700 hover:text-blue-700">Notes</a>
+            </div>
+            <div class="ml-auto">
                 {% if user.is_authenticated %}
                     <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
                     <a href="{% url 'logout' %}" class="text-sm text-blue-600 hover:text-blue-800">Logout</a>
@@ -33,8 +46,17 @@
     </header>
 
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-6">{{ company.name }} ({{ company.ticker }})</h1>
+        <h1 class="text-3xl font-bold text-gray-900 mb-4">{{ company.name }} ({{ company.ticker }})</h1>
+        <div class="flex items-center gap-2 mb-6">
+            <button id="tab-tearsheet" class="tab-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 font-medium" data-tab="tearsheet">
+                Tearsheet
+            </button>
+            <button id="tab-discussion" class="tab-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700" data-tab="discussion">
+                Discussion
+            </button>
+        </div>
 
+        <div id="tab-tearsheet-panel">
         <!-- Top Row: Description + Chart -->
         {% if price_data_json != "[]" %}
         <div class="grid grid-cols-3 gap-6 mb-6">
@@ -71,10 +93,16 @@
         </div>
         {% endif %}
 
-        <!-- Financials + Notes Row -->
-        <div class="grid grid-cols-3 gap-6 mb-6">
-            <!-- Financial Statements Card (2/3) -->
-            <div class="col-span-2 bg-white rounded-lg shadow p-6">
+        <!-- Financial Statements Row -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <button id="financials-toggle" class="w-full flex items-center justify-between px-6 py-4 text-left">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Financial Statements</h2>
+                    <p id="financials-toggle-text" class="text-xs text-gray-500">Click to expand</p>
+                </div>
+                <span id="financials-toggle-icon" class="text-gray-400">▼</span>
+            </button>
+            <div id="financials-content" class="px-6 py-0 max-h-0 overflow-hidden transition-all duration-300">
                 <div class="flex items-center gap-4 mb-4">
                     <label for="stmt" class="text-sm font-medium text-gray-700">Statement</label>
                     <select id="stmt" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
@@ -94,12 +122,61 @@
                     {% include "companies/statement_table.html" with table=CF_table %}
                 </div>
             </div>
+        </div>
+
+        <!-- AI Chat + Notes Row -->
+        <div class="grid grid-cols-5 gap-6 mb-6">
+            <div class="col-span-3 bg-white rounded-lg shadow p-0 flex" style="height: 500px;">
+                <div class="w-2/5 border-r border-gray-100 p-4 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-semibold text-gray-900">Chats</h2>
+                        {% if user.is_authenticated %}
+                        <button id="chat-new-session" class="px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700">New</button>
+                        {% endif %}
+                    </div>
+                    <div id="chat-session-list" class="flex-1 overflow-y-auto space-y-2"></div>
+                    {% if not user.is_authenticated %}
+                    <p class="text-xs text-gray-500 mt-3">Log in to save and view chats.</p>
+                    {% endif %}
+                </div>
+                <div class="w-3/5 flex flex-col">
+                    <div class="border-b border-gray-100 p-4">
+                        <h2 class="text-sm font-semibold text-gray-900">AI Chat</h2>
+                        <p id="chat-session-title" class="text-xs text-gray-500">Select a chat to begin.</p>
+                    </div>
+                    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+                    <div class="border-t border-gray-100 p-3">
+                        {% if user.is_authenticated %}
+                        <textarea id="chat-input" rows="2" placeholder="Ask a question..."
+                                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500 resize-none"></textarea>
+                        <button id="chat-send" class="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700">
+                            Send
+                        </button>
+                        {% else %}
+                        <div class="text-sm text-gray-500">Log in to chat with the assistant.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
 
             <!-- Notes Card (1/3) -->
-            <div class="col-span-1 bg-white rounded-lg shadow p-6 flex flex-col relative" style="height: 500px;">
+            <div class="col-span-2 bg-white rounded-lg shadow p-6 flex flex-col relative" style="height: 500px;">
                 <h2 class="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">Notes</h2>
 
                 {% if user.is_authenticated %}
+                <div class="flex items-center justify-between mb-3">
+                    <div id="folder-list" class="flex flex-wrap gap-2">
+                        <button type="button" class="folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700 bg-gray-100" data-folder="">
+                            All notes
+                        </button>
+                        {% for folder in note_folders %}
+                        <button type="button" class="folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700" data-folder="{{ folder }}">
+                            {{ folder }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    <button id="add-folder-btn" class="text-xs text-blue-600 hover:text-blue-800">Add folder</button>
+                </div>
                 <!-- Notes Form -->
                 <div class="flex-shrink-0 mb-4">
                     <input type="text" id="note-title" placeholder="Title (optional)"
@@ -114,7 +191,7 @@
                 <!-- Notes List -->
                 <div id="notes-list" class="overflow-y-auto flex-grow space-y-3">
                     {% for note in notes %}
-                    <div class="border-b border-gray-100 pb-3">
+                    <div class="note-item border-b border-gray-100 pb-3" data-folder="{{ note.folder }}">
                         {% if note.title %}
                         <h3 class="font-medium text-gray-900 text-sm">{{ note.title }}</h3>
                         {% endif %}
@@ -194,6 +271,79 @@
                 </div>
             </div>
             <div id="news-list" class="space-y-3 max-h-96 overflow-y-auto pr-1"></div>
+        </div>
+        </div>
+
+        <div id="tab-discussion-panel" class="hidden">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <button id="discussion-view-threads" class="discussion-view-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 font-medium" data-view="threads">
+                            Threads
+                        </button>
+                        <button id="discussion-view-messages" class="discussion-view-btn px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700" data-view="messages">
+                            All messages
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <label for="discussion-sort" class="text-sm text-gray-700">Sort</label>
+                        <select id="discussion-sort" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
+                            <option value="chrono" selected>Chronological</option>
+                            <option value="top">Top</option>
+                        </select>
+                        <select id="discussion-window" class="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 border focus:border-blue-500 focus:ring-blue-500">
+                            <option value="week">Week</option>
+                            <option value="month">Month</option>
+                            <option value="year">Year</option>
+                            <option value="all" selected>All time</option>
+                        </select>
+                        {% if user.is_authenticated %}
+                        <button id="open-thread-form" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700">
+                            Create new thread
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div id="discussion-thread-detail" class="hidden mb-4">
+                    <button id="back-to-threads" class="text-sm text-blue-600 hover:text-blue-800 mb-3">Back to threads</button>
+                    <h3 id="thread-detail-title" class="text-base font-semibold text-gray-900 mb-3"></h3>
+                    <div id="thread-detail-messages" class="space-y-3 mb-4"></div>
+                    {% if user.is_authenticated %}
+                    <textarea id="thread-reply-content" rows="3"
+                              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500 resize-none" placeholder="Write a reply..."></textarea>
+                    <button id="thread-reply-btn" class="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700">
+                        Post Reply
+                    </button>
+                    {% else %}
+                    <div class="text-sm text-gray-600">Log in to reply.</div>
+                    {% endif %}
+                </div>
+
+                <div id="discussion-thread-list" class="space-y-4"></div>
+                <div id="discussion-message-list" class="space-y-3 hidden"></div>
+            </div>
+        </div>
+
+        <div id="thread-form-overlay" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-20">
+            <div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-semibold text-gray-900">Start a thread</h3>
+                    <button id="close-thread-form" class="text-sm text-gray-500 hover:text-gray-700">Close</button>
+                </div>
+                <input type="text" id="thread-title" placeholder="Thread title"
+                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500">
+                <textarea id="thread-content" placeholder="Opening message" rows="4"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-3 focus:border-blue-500 focus:ring-blue-500 resize-none"></textarea>
+                <div class="flex items-center justify-end gap-2">
+                    <button id="cancel-thread-form" class="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100">
+                        Cancel
+                    </button>
+                    <button id="add-thread-btn" class="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700">
+                        Post Thread
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -421,6 +571,62 @@
             const noNotesMsg = document.getElementById('no-notes-msg');
 
             if (!addBtn) return;
+            let currentFolder = '';
+
+            function setActiveFolder(folder) {
+                currentFolder = folder;
+                document.querySelectorAll('.folder-btn').forEach(btn => {
+                    const isActive = btn.dataset.folder === folder;
+                    btn.classList.toggle('bg-gray-100', isActive);
+                    btn.classList.toggle('font-medium', isActive);
+                });
+                filterNotes();
+            }
+
+            function filterNotes() {
+                const noteItems = document.querySelectorAll('.note-item');
+                let visibleCount = 0;
+                noteItems.forEach(item => {
+                    const matches = currentFolder === '' || item.dataset.folder === currentFolder;
+                    item.style.display = matches ? '' : 'none';
+                    if (matches) {
+                        visibleCount += 1;
+                    }
+                });
+                if (noNotesMsg) {
+                    noNotesMsg.style.display = visibleCount === 0 ? '' : 'none';
+                }
+            }
+
+            document.querySelectorAll('.folder-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setActiveFolder(btn.dataset.folder || '');
+                });
+            });
+
+            const addFolderBtn = document.getElementById('add-folder-btn');
+            if (addFolderBtn) {
+                addFolderBtn.addEventListener('click', () => {
+                    const name = prompt('Folder name');
+                    if (!name) return;
+                    const trimmed = name.trim();
+                    if (!trimmed) return;
+                    const existing = Array.from(document.querySelectorAll('.folder-btn'))
+                        .some(btn => btn.dataset.folder.toLowerCase() === trimmed.toLowerCase());
+                    if (existing) {
+                        setActiveFolder(trimmed);
+                        return;
+                    }
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700';
+                    button.dataset.folder = trimmed;
+                    button.textContent = trimmed;
+                    button.addEventListener('click', () => setActiveFolder(trimmed));
+                    document.getElementById('folder-list').appendChild(button);
+                    setActiveFolder(trimmed);
+                });
+            }
 
             addBtn.addEventListener('click', async function() {
                 const title = titleInput.value.trim();
@@ -438,7 +644,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRFToken': '{{ csrf_token }}'
                         },
-                        body: JSON.stringify({ title, content })
+                        body: JSON.stringify({ title, content, folder: currentFolder })
                     });
 
                     const data = await response.json();
@@ -451,7 +657,8 @@
 
                         // Create new note element
                         const noteEl = document.createElement('div');
-                        noteEl.className = 'border-b border-gray-100 pb-3';
+                        noteEl.className = 'note-item border-b border-gray-100 pb-3';
+                        noteEl.dataset.folder = data.folder || '';
                         noteEl.innerHTML = `
                             ${data.title ? `<h3 class="font-medium text-gray-900 text-sm">${data.title}</h3>` : ''}
                             <p class="text-gray-700 text-sm whitespace-pre-wrap">${data.content}</p>
@@ -464,6 +671,7 @@
                         // Clear inputs
                         titleInput.value = '';
                         contentInput.value = '';
+                        filterNotes();
                     } else {
                         alert(data.error || 'Failed to add note.');
                     }
@@ -472,6 +680,8 @@
                     alert('Failed to add note.');
                 }
             });
+
+            setActiveFolder('');
         })();
     </script>
     {% endif %}
@@ -646,6 +856,512 @@
                 loadNews(false);
             });
             loadNews(true);
+        })();
+    </script>
+    <script>
+        (function() {
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            const tearsheetPanel = document.getElementById('tab-tearsheet-panel');
+            const discussionPanel = document.getElementById('tab-discussion-panel');
+            if (!tearsheetPanel || !discussionPanel) return;
+
+            function setActiveTab(tab) {
+                tabButtons.forEach(btn => {
+                    const isActive = btn.dataset.tab === tab;
+                    btn.classList.toggle('bg-gray-100', isActive);
+                    btn.classList.toggle('font-medium', isActive);
+                });
+                if (tab === 'discussion') {
+                    tearsheetPanel.classList.add('hidden');
+                    discussionPanel.classList.remove('hidden');
+                } else {
+                    discussionPanel.classList.add('hidden');
+                    tearsheetPanel.classList.remove('hidden');
+                }
+            }
+
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+            });
+            setActiveTab('tearsheet');
+        })();
+    </script>
+    <script>
+        (function() {
+            const ticker = "{{ company.ticker }}";
+            const threadsList = document.getElementById('discussion-thread-list');
+            const messagesList = document.getElementById('discussion-message-list');
+            const threadDetail = document.getElementById('discussion-thread-detail');
+            const threadDetailTitle = document.getElementById('thread-detail-title');
+            const threadDetailMessages = document.getElementById('thread-detail-messages');
+            const backToThreads = document.getElementById('back-to-threads');
+            const threadReplyContent = document.getElementById('thread-reply-content');
+            const threadReplyBtn = document.getElementById('thread-reply-btn');
+            const viewButtons = document.querySelectorAll('.discussion-view-btn');
+            const sortSelect = document.getElementById('discussion-sort');
+            const windowSelect = document.getElementById('discussion-window');
+            const addThreadBtn = document.getElementById('add-thread-btn');
+            const threadTitle = document.getElementById('thread-title');
+            const threadContent = document.getElementById('thread-content');
+            const openThreadForm = document.getElementById('open-thread-form');
+            const closeThreadForm = document.getElementById('close-thread-form');
+            const cancelThreadForm = document.getElementById('cancel-thread-form');
+            const threadFormOverlay = document.getElementById('thread-form-overlay');
+
+            if (!threadsList || !messagesList || !sortSelect || !windowSelect) return;
+
+            let currentView = 'threads';
+            let activeThreadId = null;
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            async function loadThreads() {
+                const url = new URL(`/companies/${ticker}/discussion/threads/`, window.location.origin);
+                url.searchParams.set('sort', sortSelect.value);
+                url.searchParams.set('window', windowSelect.value);
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (!response.ok) {
+                    threadsList.innerHTML = '<p class="text-sm text-gray-500">Failed to load threads.</p>';
+                    return;
+                }
+                if (!data.threads || data.threads.length === 0) {
+                    threadsList.innerHTML = '<p class="text-sm text-gray-500">No threads yet.</p>';
+                    return;
+                }
+                threadsList.innerHTML = data.threads.map(thread => `
+                    <button class="thread-card w-full text-left border border-gray-100 rounded-md p-4 hover:border-blue-200 hover:bg-blue-50/30" data-thread="${thread.id}">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <h3 class="text-sm font-semibold text-gray-900">${escapeHtml(thread.title)}</h3>
+                            <span class="text-xs text-gray-500">${escapeHtml(thread.created_at)}</span>
+                        </div>
+                        <p class="text-sm text-gray-700 mb-3">${escapeHtml(thread.latest_message || '')}</p>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs text-gray-500">${thread.message_count} messages</span>
+                        </div>
+                    </button>
+                `).join('');
+            }
+
+            async function loadMessages() {
+                const url = new URL(`/companies/${ticker}/discussion/messages/`, window.location.origin);
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (!response.ok) {
+                    messagesList.innerHTML = '<p class="text-sm text-gray-500">Failed to load messages.</p>';
+                    return;
+                }
+                if (!data.messages || data.messages.length === 0) {
+                    messagesList.innerHTML = '<p class="text-sm text-gray-500">No messages yet.</p>';
+                    return;
+                }
+                messagesList.innerHTML = data.messages.map(message => `
+                    <div class="border border-gray-100 rounded-md p-3">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <h4 class="text-sm font-medium text-gray-900">${escapeHtml(message.title)}</h4>
+                            <span class="text-xs text-gray-500">${escapeHtml(message.created_at)}</span>
+                        </div>
+                        <p class="text-sm text-gray-700">${escapeHtml(message.content)}</p>
+                        <button class="message-reply text-xs text-blue-600 hover:text-blue-800 mt-2" data-thread="${message.thread_id}">
+                            Reply
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            function setView(view) {
+                currentView = view;
+                viewButtons.forEach(btn => {
+                    const isActive = btn.dataset.view === view;
+                    btn.classList.toggle('bg-gray-100', isActive);
+                    btn.classList.toggle('font-medium', isActive);
+                });
+                if (view === 'threads') {
+                    messagesList.classList.add('hidden');
+                    threadsList.classList.remove('hidden');
+                    if (threadDetail) threadDetail.classList.add('hidden');
+                    loadThreads();
+                } else {
+                    threadsList.classList.add('hidden');
+                    messagesList.classList.remove('hidden');
+                    if (threadDetail) threadDetail.classList.add('hidden');
+                    loadMessages();
+                }
+            }
+
+            sortSelect.addEventListener('change', () => {
+                if (currentView === 'threads') loadThreads();
+            });
+            windowSelect.addEventListener('change', () => {
+                if (currentView === 'threads') loadThreads();
+            });
+
+            viewButtons.forEach(btn => {
+                btn.addEventListener('click', () => setView(btn.dataset.view));
+            });
+
+            if (addThreadBtn) {
+                addThreadBtn.addEventListener('click', async () => {
+                    const title = threadTitle.value.trim();
+                    const content = threadContent.value.trim();
+                    if (!title || !content) {
+                        alert('Please enter a title and message.');
+                        return;
+                    }
+                    const response = await fetch(`/companies/${ticker}/discussion/threads/add/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ title, content })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        alert(data.error || 'Failed to create thread.');
+                        return;
+                    }
+                    threadTitle.value = '';
+                    threadContent.value = '';
+                    if (threadFormOverlay) threadFormOverlay.classList.add('hidden');
+                    setView('threads');
+                });
+            }
+
+            async function openThread(threadId) {
+                activeThreadId = threadId;
+                const response = await fetch(`/companies/${ticker}/discussion/threads/${threadId}/`);
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Failed to load thread.');
+                    return;
+                }
+                threadsList.classList.add('hidden');
+                if (messagesList) messagesList.classList.add('hidden');
+                if (threadDetail) threadDetail.classList.remove('hidden');
+                if (threadDetailTitle) threadDetailTitle.textContent = data.thread.title;
+                if (threadDetailMessages) {
+                    if (!data.messages || data.messages.length === 0) {
+                        threadDetailMessages.innerHTML = '<p class="text-sm text-gray-500">No messages yet.</p>';
+                    } else {
+                        threadDetailMessages.innerHTML = data.messages.map(message => `
+                            <div class="border border-gray-100 rounded-md p-3">
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <span class="text-xs text-gray-500">${escapeHtml(message.created_at)}</span>
+                                </div>
+                                <p class="text-sm text-gray-700">${escapeHtml(message.content)}</p>
+                            </div>
+                        `).join('');
+                    }
+                }
+            }
+
+            threadsList.addEventListener('click', async (event) => {
+                const threadCard = event.target.closest('.thread-card');
+                if (!threadCard) return;
+                await openThread(threadCard.dataset.thread);
+            });
+
+            if (backToThreads) {
+                backToThreads.addEventListener('click', () => {
+                    activeThreadId = null;
+                    if (threadDetail) threadDetail.classList.add('hidden');
+                    threadsList.classList.remove('hidden');
+                    loadThreads();
+                });
+            }
+
+            if (threadReplyBtn) {
+                threadReplyBtn.addEventListener('click', async () => {
+                    if (!activeThreadId) return;
+                    const content = threadReplyContent ? threadReplyContent.value.trim() : '';
+                    if (!content) {
+                        alert('Please enter a reply.');
+                        return;
+                    }
+                    const response = await fetch(`/companies/${ticker}/discussion/threads/${activeThreadId}/messages/add/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        alert(data.error || 'Failed to post reply.');
+                        return;
+                    }
+                    threadReplyContent.value = '';
+                    const refreshed = await fetch(`/companies/${ticker}/discussion/threads/${activeThreadId}/`);
+                    const refreshedData = await refreshed.json();
+                    if (refreshed.ok && threadDetailMessages) {
+                        if (!refreshedData.messages || refreshedData.messages.length === 0) {
+                            threadDetailMessages.innerHTML = '<p class="text-sm text-gray-500">No messages yet.</p>';
+                        } else {
+                            threadDetailMessages.innerHTML = refreshedData.messages.map(message => `
+                                <div class="border border-gray-100 rounded-md p-3">
+                                    <div class="flex items-center justify-between gap-2 mb-1">
+                                        <span class="text-xs text-gray-500">${escapeHtml(message.created_at)}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-700">${escapeHtml(message.content)}</p>
+                                </div>
+                            `).join('');
+                        }
+                    }
+                });
+            }
+
+            messagesList.addEventListener('click', async (event) => {
+                const replyBtn = event.target.closest('.message-reply');
+                if (!replyBtn) return;
+                await openThread(replyBtn.dataset.thread);
+            });
+
+            function closeThreadFormOverlay() {
+                if (threadFormOverlay) {
+                    threadFormOverlay.classList.add('hidden');
+                    threadFormOverlay.classList.remove('flex');
+                }
+            }
+
+            if (openThreadForm) {
+                openThreadForm.addEventListener('click', () => {
+                    if (threadFormOverlay) {
+                        threadFormOverlay.classList.remove('hidden');
+                        threadFormOverlay.classList.add('flex');
+                    }
+                });
+            }
+            if (closeThreadForm) {
+                closeThreadForm.addEventListener('click', closeThreadFormOverlay);
+            }
+            if (cancelThreadForm) {
+                cancelThreadForm.addEventListener('click', closeThreadFormOverlay);
+            }
+
+            setView('threads');
+        })();
+    </script>
+    <script>
+        (function() {
+            const toggle = document.getElementById('financials-toggle');
+            const content = document.getElementById('financials-content');
+            const icon = document.getElementById('financials-toggle-icon');
+            const text = document.getElementById('financials-toggle-text');
+            if (!toggle || !content || !icon || !text) return;
+
+            let expanded = false;
+            function update() {
+                content.style.maxHeight = expanded ? '2000px' : '0px';
+                content.classList.toggle('py-6', expanded);
+                content.classList.toggle('py-0', !expanded);
+                icon.textContent = expanded ? '▲' : '▼';
+                text.textContent = expanded ? 'Click to collapse' : 'Click to expand';
+            }
+
+            toggle.addEventListener('click', () => {
+                expanded = !expanded;
+                update();
+            });
+            update();
+        })();
+    </script>
+    <script>
+        (function() {
+            const ticker = "{{ company.ticker }}";
+            const sessionList = document.getElementById('chat-session-list');
+            const messagesEl = document.getElementById('chat-messages');
+            const sendBtn = document.getElementById('chat-send');
+            const input = document.getElementById('chat-input');
+            const newBtn = document.getElementById('chat-new-session');
+            const sessionTitle = document.getElementById('chat-session-title');
+            if (!sessionList || !messagesEl || !sessionTitle) return;
+
+            let activeSessionId = null;
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function renderMessage(role, content) {
+                const isUser = role === 'user';
+                return `
+                    <div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
+                        <div class="max-w-[80%] rounded-lg px-3 py-2 text-sm ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
+                            ${escapeHtml(content)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            async function loadSessions() {
+                try {
+                    const response = await fetch(`/companies/${ticker}/chat/sessions/`);
+                    const data = await response.json();
+                    if (!response.ok) {
+                        sessionList.innerHTML = '<p class="text-xs text-gray-500">Failed to load chats.</p>';
+                        return;
+                    }
+                    if (!data.sessions || data.sessions.length === 0) {
+                        sessionList.innerHTML = '<p class="text-xs text-gray-500">No chats yet.</p>';
+                        return;
+                    }
+                    sessionList.innerHTML = data.sessions.map(session => `
+                        <button class="chat-session w-full text-left px-2 py-2 rounded-md text-sm hover:bg-gray-100 ${session.id === activeSessionId ? 'bg-gray-100 font-medium' : ''}" data-session="${session.id}">
+                            <div class="truncate">${escapeHtml(session.title || 'Untitled chat')}</div>
+                            <div class="text-[11px] text-gray-400">${escapeHtml(session.updated_at)}</div>
+                        </button>
+                    `).join('');
+
+                    if (!activeSessionId) {
+                        activeSessionId = data.sessions[0].id;
+                        loadMessages(activeSessionId);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    sessionList.innerHTML = '<p class="text-xs text-gray-500">Failed to load chats.</p>';
+                }
+            }
+
+            async function loadMessages(sessionId) {
+                if (!sessionId) return;
+                const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/`);
+                const data = await response.json();
+                if (!response.ok) {
+                    messagesEl.innerHTML = '<p class="text-sm text-gray-500">Failed to load messages.</p>';
+                    return;
+                }
+                sessionTitle.textContent = data.session.title;
+                messagesEl.innerHTML = data.messages.map(msg => renderMessage(msg.role, msg.content)).join('');
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+                highlightActive(sessionId);
+            }
+
+            function highlightActive(sessionId) {
+                sessionList.querySelectorAll('.chat-session').forEach(btn => {
+                    btn.classList.toggle('bg-gray-100', btn.dataset.session === String(sessionId));
+                    btn.classList.toggle('font-medium', btn.dataset.session === String(sessionId));
+                });
+            }
+
+            async function createSession() {
+                const response = await fetch(`/companies/${ticker}/chat/sessions/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Failed to create chat.');
+                    return null;
+                }
+                activeSessionId = data.id;
+                await loadSessions();
+                await loadMessages(activeSessionId);
+                return activeSessionId;
+            }
+
+            async function sendMessage() {
+                if (!input || !sendBtn) return;
+                const content = input.value.trim();
+                if (!content) return;
+                if (!activeSessionId) {
+                    const created = await createSession();
+                    if (!created) return;
+                }
+                sendBtn.disabled = true;
+                try {
+                    const response = await fetch(`/companies/${ticker}/chat/sessions/${activeSessionId}/send/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        alert(data.error || 'Failed to send message.');
+                        return;
+                    }
+                    messagesEl.insertAdjacentHTML('beforeend', renderMessage('user', data.user_message.content));
+                    messagesEl.insertAdjacentHTML('beforeend', renderMessage('assistant', data.assistant_message.content));
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    input.value = '';
+                    await loadSessions();
+                } finally {
+                    sendBtn.disabled = false;
+                }
+            }
+
+            sessionList.addEventListener('click', (event) => {
+                const btn = event.target.closest('.chat-session');
+                if (!btn) return;
+                activeSessionId = btn.dataset.session;
+                loadMessages(activeSessionId);
+            });
+
+            if (newBtn) {
+                newBtn.addEventListener('click', () => {
+                    activeSessionId = null;
+                    messagesEl.innerHTML = '';
+                    sessionTitle.textContent = 'New chat';
+                    createSession();
+                });
+            }
+
+            if (sendBtn && input) {
+                sendBtn.addEventListener('click', sendMessage);
+                input.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        sendMessage();
+                    }
+                });
+            }
+
+            loadSessions();
+        })();
+    </script>
+    <script>
+        (function() {
+            const input = document.getElementById('header-search');
+            const results = document.getElementById('header-results');
+            if (!input || !results) return;
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim();
+                if (q.length < 1) { results.classList.add('hidden'); return; }
+
+                const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+                const data = await res.json();
+
+                if (data.length === 0) { results.classList.add('hidden'); return; }
+
+                results.innerHTML = data.map(c =>
+                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                        <span class="font-medium text-gray-900">${c.ticker}</span>
+                        <span class="text-gray-500">${c.name}</span>
+                    </a></li>`
+                ).join('');
+                results.classList.remove('hidden');
+            });
         })();
     </script>
 </body>

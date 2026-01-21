@@ -95,7 +95,7 @@ DEV_MSGS = {
         - Search widely and creatively. Pull at small threads. Do searches that might turn up unexpected things, like "[CEO name] scandal" or "[Company] whistleblower"
         - Before finalising your answer, carefully consider the item(s) - are they GENUINELY big and decision-relevant? If not, discard.
         - If none of (a)-(k) apply, output nothing beyond a brief statement like: "No decision-relevant special-situation items found in the last 12 months."
-        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events.
+        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events. Do not state "omit". Your direct response to this prompt will be displayed to users. Simply ignore all that do not apply. 
         - DO NOT pad output with routine results, normal trading updates, small contracts, minor dividends, standard refinancing, routine board changes, or generic "strategy" commentary.
 
         EVIDENCE AND SOURCE BEHAVIOUR

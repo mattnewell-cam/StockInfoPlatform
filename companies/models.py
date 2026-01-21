@@ -198,6 +198,7 @@ class StockPrice(models.Model):
 class Note(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notes")
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="notes")
+    folder = models.CharField(max_length=100, blank=True, default="")
     title = models.CharField(max_length=255, blank=True, default="")
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -210,6 +211,24 @@ class Note(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username} - {self.company.ticker}: {self.title or 'Untitled'}"
+
+
+class NoteCompany(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="note_companies")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="noted_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "company"], name="uniq_user_company_note")
+        ]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} notes {self.company.ticker}"
 
 
 class EmailVerificationToken(models.Model):
@@ -227,3 +246,76 @@ class EmailVerificationToken(models.Model):
 
     def __str__(self):
         return f"Verification for {self.user.email}"
+
+
+class DiscussionThread(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="threads")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="threads")
+    title = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["company", "-created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.company.ticker}: {self.title}"
+
+
+class DiscussionMessage(models.Model):
+    thread = models.ForeignKey(DiscussionThread, on_delete=models.CASCADE, related_name="messages")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="messages")
+    content = models.TextField()
+    is_opening = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["thread", "-created_at"]),
+            models.Index(fields=["-created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.thread.title}: {self.user.username}"
+
+
+class ChatSession(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_sessions")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="chat_sessions")
+    title = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["company", "user", "-updated_at"]),
+        ]
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"{self.company.ticker}: {self.title or 'Chat'}"
+
+
+class ChatMessage(models.Model):
+    ROLE_CHOICES = {
+        "user": "User",
+        "assistant": "Assistant",
+        "system": "System",
+    }
+
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["session", "created_at"]),
+        ]
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.session_id} {self.role}"

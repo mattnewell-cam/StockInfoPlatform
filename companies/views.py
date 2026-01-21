@@ -11,9 +11,14 @@ import json
 import yfinance as yf
 import requests
 
+import os
 from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken
 from companies.utils import send_verification_email
 from django.db.models import Q
+from django.utils import timezone
+from django.db.models import Count, Q as DQ
+
+from companies.models import DiscussionThread, DiscussionMessage, ChatSession, ChatMessage, NoteCompany
 
 
 def home(request):
@@ -274,10 +279,273 @@ class CompanyDetailView(DetailView):
         if self.request.user.is_authenticated:
             notes = Note.objects.filter(user=self.request.user, company=self.object)
             ctx["notes"] = notes
+            ctx["note_folders"] = sorted({n.folder for n in notes if n.folder})
         else:
             ctx["notes"] = []
+            ctx["note_folders"] = []
 
         return ctx
+
+
+def _window_start(window):
+    now = timezone.now()
+    if window == "week":
+        return now - timezone.timedelta(days=7)
+    if window == "month":
+        return now - timezone.timedelta(days=30)
+    if window == "year":
+        return now - timezone.timedelta(days=365)
+    return None
+
+
+def discussion_threads(request, ticker):
+    """List discussion threads for a company."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    sort = request.GET.get("sort", "chrono")
+    window = request.GET.get("window", "all")
+
+    qs = DiscussionThread.objects.filter(company=company)
+    if sort == "top":
+        since = _window_start(window)
+        if since:
+            qs = qs.annotate(
+                message_count=Count("messages", filter=DQ(messages__created_at__gte=since))
+            )
+        else:
+            qs = qs.annotate(message_count=Count("messages"))
+        qs = qs.order_by("-message_count", "-created_at")
+    else:
+        qs = qs.order_by("-created_at")
+
+    threads = []
+    for thread in qs:
+        threads.append({
+            "id": thread.id,
+            "title": thread.title,
+            "created_at": thread.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+            "message_count": getattr(thread, "message_count", thread.messages.count()),
+            "latest_message": thread.messages.order_by("-created_at").first().content if thread.messages.exists() else "",
+        })
+
+    return JsonResponse({"threads": threads})
+
+
+def discussion_messages(request, ticker):
+    """List all discussion messages for a company."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    messages = DiscussionMessage.objects.filter(thread__company=company).select_related("thread")
+    messages = messages.order_by("-created_at")
+
+    items = []
+    for msg in messages:
+        title = msg.thread.title if msg.is_opening else f"Re: {msg.thread.title}"
+        items.append({
+            "id": msg.id,
+            "title": title,
+            "content": msg.content,
+            "created_at": msg.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+            "thread_id": msg.thread_id,
+        })
+
+    return JsonResponse({"messages": items})
+
+
+def discussion_thread_messages(request, ticker, thread_id):
+    """List messages for a single thread."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        thread = DiscussionThread.objects.get(id=thread_id, company=company)
+    except DiscussionThread.DoesNotExist:
+        return JsonResponse({"error": "Thread not found"}, status=404)
+
+    messages = DiscussionMessage.objects.filter(thread=thread).order_by("-created_at")
+    items = []
+    for msg in messages:
+        title = thread.title if msg.is_opening else f"Re: {thread.title}"
+        items.append({
+            "id": msg.id,
+            "title": title,
+            "content": msg.content,
+            "created_at": msg.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+            "thread_id": thread.id,
+        })
+
+    return JsonResponse({
+        "thread": {"id": thread.id, "title": thread.title},
+        "messages": items,
+    })
+
+
+@login_required
+def chat_sessions(request, ticker):
+    """List or create chat sessions for a company."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            data = {}
+        title = (data.get("title") or "").strip()
+        session = ChatSession.objects.create(
+            user=request.user,
+            company=company,
+            title=title,
+        )
+        return JsonResponse({
+            "id": session.id,
+            "title": session.title,
+            "updated_at": session.updated_at.strftime("%d/%m/%Y, %I:%M %p"),
+        })
+
+    sessions = ChatSession.objects.filter(user=request.user, company=company).order_by("-updated_at")
+    return JsonResponse({
+        "sessions": [
+            {
+                "id": s.id,
+                "title": s.title or "Untitled chat",
+                "updated_at": s.updated_at.strftime("%d/%m/%Y, %I:%M %p"),
+            }
+            for s in sessions
+        ]
+    })
+
+
+@login_required
+def chat_session_messages(request, ticker, session_id):
+    """List messages for a chat session."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        session = ChatSession.objects.get(id=session_id, user=request.user, company=company)
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Chat session not found"}, status=404)
+
+    messages = ChatMessage.objects.filter(session=session).order_by("created_at")
+    return JsonResponse({
+        "session": {
+            "id": session.id,
+            "title": session.title or "Untitled chat",
+        },
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "created_at": m.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+            }
+            for m in messages
+        ],
+    })
+
+
+@login_required
+@require_POST
+def chat_send_message(request, ticker, session_id):
+    """Send a message to a chat session and get assistant reply."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        session = ChatSession.objects.get(id=session_id, user=request.user, company=company)
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Chat session not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        content = (data.get("content") or "").strip()
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    if not content:
+        return JsonResponse({"error": "Message is required"}, status=400)
+
+    user_message = ChatMessage.objects.create(
+        session=session,
+        role="user",
+        content=content,
+    )
+
+    session.title = session.title or content[:60]
+    session.save(update_fields=["title", "updated_at"])
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return JsonResponse({"error": "Missing OPENAI_API_KEY"}, status=500)
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+        history = ChatMessage.objects.filter(session=session).order_by("created_at")
+        messages = [{"role": m.role, "content": m.content} for m in history]
+
+        context_parts = []
+        if company.description:
+            context_parts.append(f"Business description:\n{company.description}")
+        if company.special_sits:
+            context_parts.append(f"Special situations:\n{company.special_sits}")
+        if context_parts:
+            context_text = "\n\n".join(context_parts)
+            messages.insert(0, {
+                "role": "system",
+                "content": (
+                    "Be concise and answer only what the user asked. Avoid follow-up questions or extra context "
+                    "unless essential. Use the following company context when answering user questions.\n\n"
+                    + context_text
+                )
+            })
+
+        response = client.responses.create(
+            model=model,
+            input=messages,
+        )
+        assistant_text = response.output_text
+    except Exception as exc:
+        return JsonResponse({"error": f"OpenAI request failed: {exc}"}, status=502)
+
+    assistant_message = ChatMessage.objects.create(
+        session=session,
+        role="assistant",
+        content=assistant_text,
+    )
+    session.save(update_fields=["updated_at"])
+
+    return JsonResponse({
+        "user_message": {
+            "id": user_message.id,
+            "role": user_message.role,
+            "content": user_message.content,
+            "created_at": user_message.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+        },
+        "assistant_message": {
+            "id": assistant_message.id,
+            "role": assistant_message.role,
+            "content": assistant_message.content,
+            "created_at": assistant_message.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+        },
+    })
 
 
 def intraday_prices(request, ticker, period):
@@ -346,6 +614,7 @@ def add_note(request, ticker):
         data = json.loads(request.body)
         title = data.get("title", "").strip()
         content = data.get("content", "").strip()
+        folder = data.get("folder", "").strip()
 
         if not content:
             return JsonResponse({"error": "Content is required"}, status=400)
@@ -354,16 +623,150 @@ def add_note(request, ticker):
             user=request.user,
             company=company,
             title=title,
-            content=content
+            content=content,
+            folder=folder
         )
+        NoteCompany.objects.get_or_create(user=request.user, company=company)
 
         return JsonResponse({
             "id": note.id,
             "title": note.title,
             "content": note.content,
+            "folder": note.folder,
             "created_at": note.created_at.strftime("%d/%m/%Y, %I:%M %p")
         })
 
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+def notes_home(request):
+    note_company_ids = set(NoteCompany.objects.filter(user=request.user).values_list("company_id", flat=True))
+    note_company_ids.update(
+        Note.objects.filter(user=request.user).values_list("company_id", flat=True)
+    )
+    companies = Company.objects.filter(id__in=note_company_ids).annotate(
+        note_count=Count("notes", filter=DQ(notes__user=request.user))
+    ).order_by("name")
+    return render(request, "companies/notes_home.html", {
+        "companies": companies,
+    })
+
+
+@login_required
+def notes_company(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return redirect("notes_home")
+
+    notes = Note.objects.filter(user=request.user, company=company)
+    note_folders = sorted({n.folder for n in notes if n.folder})
+    return render(request, "companies/notes_company.html", {
+        "company": company,
+        "notes": notes,
+        "note_folders": note_folders,
+    })
+
+
+@login_required
+@require_POST
+def notes_add_company(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    ticker = (data.get("ticker") or "").strip()
+    if not ticker:
+        return JsonResponse({"error": "Ticker is required"}, status=400)
+
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    NoteCompany.objects.get_or_create(user=request.user, company=company)
+    return JsonResponse({
+        "ticker": company.ticker,
+        "name": company.name,
+    })
+
+
+@login_required
+@require_POST
+def add_thread(request, ticker):
+    """Create a new discussion thread with opening message."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title", "").strip()
+        content = data.get("content", "").strip()
+
+        if not title:
+            return JsonResponse({"error": "Title is required"}, status=400)
+        if not content:
+            return JsonResponse({"error": "Message is required"}, status=400)
+
+        thread = DiscussionThread.objects.create(
+            company=company,
+            user=request.user,
+            title=title
+        )
+        message = DiscussionMessage.objects.create(
+            thread=thread,
+            user=request.user,
+            content=content,
+            is_opening=True
+        )
+
+        return JsonResponse({
+            "thread_id": thread.id,
+            "message_id": message.id,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def add_message(request, ticker, thread_id):
+    """Add a reply to a discussion thread."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        thread = DiscussionThread.objects.get(id=thread_id, company=company)
+    except DiscussionThread.DoesNotExist:
+        return JsonResponse({"error": "Thread not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        content = data.get("content", "").strip()
+        if not content:
+            return JsonResponse({"error": "Message is required"}, status=400)
+
+        message = DiscussionMessage.objects.create(
+            thread=thread,
+            user=request.user,
+            content=content,
+            is_opening=False
+        )
+
+        return JsonResponse({
+            "message_id": message.id,
+        })
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:

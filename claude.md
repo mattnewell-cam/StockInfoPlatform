@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TrackStack is a Django web app for small-cap investors to search companies and view financials, pricing charts, AI summaries, and personal notes.
+Tearsheet is a Django web app for small-cap investors to search companies and view financials, pricing charts, AI summaries, and personal notes.
 
 **Status:** MVP in progress. Data ingestion, auth, and company detail views are working; AI summaries are cached and loadable.
 

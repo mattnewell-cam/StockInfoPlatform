@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ company.name }} Notes - TrackStack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <header class="bg-white shadow-sm">
+        <div class="w-full px-6 py-3 flex justify-between items-center gap-6">
+            <a href="/" class="flex items-center gap-2 text-gray-900 hover:text-blue-700">
+                <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 121.01 122.88" aria-hidden="true">
+                    <path d="M86.32,110,108.8,86.38H86.32V110ZM35.61,86.34a3.66,3.66,0,1,1,0-7.31H60a3.66,3.66,0,1,1,0,7.31Zm0-24.66a3.66,3.66,0,1,1,0-7.32H85.13a3.66,3.66,0,1,1,0,7.32Zm0-24.67a3.66,3.66,0,1,1,0-7.31H85.13a3.66,3.66,0,1,1,0,7.31Zm77.73,42V7.35H7.35V115.29H79V82.71A3.68,3.68,0,0,1,82.65,79ZM87,120a5.1,5.1,0,0,1-4.31,2.9,3.58,3.58,0,0,1-1.31-.24h-74a7.25,7.25,0,0,1-4.87-1.88l-.3-.26A7.29,7.29,0,0,1,0,115.33V7.31A7.31,7.31,0,0,1,7.31,0H113.39a7.32,7.32,0,0,1,7.3,7.31V81.2a3.66,3.66,0,0,1-.68,4L87,120Z"/>
+                </svg>
+                <span class="text-lg font-semibold">TrackStack</span>
+            </a>
+            <div class="flex items-center gap-6 flex-1 max-w-3xl">
+                <div class="relative w-full">
+                    <input type="text" id="header-search" placeholder="Search by name or ticker..."
+                           class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <ul id="header-results" class="absolute z-10 bg-white rounded-lg shadow divide-y mt-2 w-full hidden"></ul>
+                </div>
+                <a href="/notes/" class="text-sm font-medium text-blue-700">Notes</a>
+            </div>
+            <div class="ml-auto">
+                <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="text-sm text-blue-600 hover:text-blue-800">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold text-gray-900">{{ company.name }} ({{ company.ticker }})</h1>
+            <a href="/notes/" class="text-sm text-blue-600 hover:text-blue-800">Back to Notes</a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 flex flex-col" style="height: 600px;">
+            <div class="flex items-center justify-between mb-3">
+                <div id="folder-list" class="flex flex-wrap gap-2">
+                    <button type="button" class="folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700 bg-gray-100" data-folder="">
+                        All notes
+                    </button>
+                    {% for folder in note_folders %}
+                    <button type="button" class="folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700" data-folder="{{ folder }}">
+                        {{ folder }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <button id="add-folder-btn" class="text-xs text-blue-600 hover:text-blue-800">Add folder</button>
+            </div>
+
+            <div class="flex-shrink-0 mb-4">
+                <input type="text" id="note-title" placeholder="Title (optional)"
+                       class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500">
+                <textarea id="note-content" placeholder="Write a note..." rows="3"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2 focus:border-blue-500 focus:ring-blue-500 resize-none"></textarea>
+                <button id="add-note-btn" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 w-full">
+                    Add Note
+                </button>
+            </div>
+
+            <div id="notes-list" class="overflow-y-auto flex-grow space-y-3">
+                {% for note in notes %}
+                <div class="note-item border-b border-gray-100 pb-3" data-folder="{{ note.folder }}">
+                    {% if note.title %}
+                    <h3 class="font-medium text-gray-900 text-sm">{{ note.title }}</h3>
+                    {% endif %}
+                    <p class="text-gray-700 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+                    <span class="text-xs text-gray-400">{{ note.created_at|date:"d/m/Y, g:i A" }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-400 text-sm" id="no-notes-msg">No notes yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            const input = document.getElementById('header-search');
+            const results = document.getElementById('header-results');
+            if (!input || !results) return;
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim();
+                if (q.length < 1) { results.classList.add('hidden'); return; }
+
+                const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+                const data = await res.json();
+
+                if (data.length === 0) { results.classList.add('hidden'); return; }
+
+                results.innerHTML = data.map(c =>
+                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                        <span class="font-medium text-gray-900">${c.ticker}</span>
+                        <span class="text-gray-500">${c.name}</span>
+                    </a></li>`
+                ).join('');
+                results.classList.remove('hidden');
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            const addBtn = document.getElementById('add-note-btn');
+            const titleInput = document.getElementById('note-title');
+            const contentInput = document.getElementById('note-content');
+            const notesList = document.getElementById('notes-list');
+            const noNotesMsg = document.getElementById('no-notes-msg');
+            if (!addBtn) return;
+
+            let currentFolder = '';
+
+            function setActiveFolder(folder) {
+                currentFolder = folder;
+                document.querySelectorAll('.folder-btn').forEach(btn => {
+                    const isActive = btn.dataset.folder === folder;
+                    btn.classList.toggle('bg-gray-100', isActive);
+                    btn.classList.toggle('font-medium', isActive);
+                });
+                filterNotes();
+            }
+
+            function filterNotes() {
+                const noteItems = document.querySelectorAll('.note-item');
+                let visibleCount = 0;
+                noteItems.forEach(item => {
+                    const matches = currentFolder === '' || item.dataset.folder === currentFolder;
+                    item.style.display = matches ? '' : 'none';
+                    if (matches) {
+                        visibleCount += 1;
+                    }
+                });
+                if (noNotesMsg) {
+                    noNotesMsg.style.display = visibleCount === 0 ? '' : 'none';
+                }
+            }
+
+            document.querySelectorAll('.folder-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setActiveFolder(btn.dataset.folder || '');
+                });
+            });
+
+            const addFolderBtn = document.getElementById('add-folder-btn');
+            if (addFolderBtn) {
+                addFolderBtn.addEventListener('click', () => {
+                    const name = prompt('Folder name');
+                    if (!name) return;
+                    const trimmed = name.trim();
+                    if (!trimmed) return;
+                    const existing = Array.from(document.querySelectorAll('.folder-btn'))
+                        .some(btn => btn.dataset.folder.toLowerCase() === trimmed.toLowerCase());
+                    if (existing) {
+                        setActiveFolder(trimmed);
+                        return;
+                    }
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'folder-btn px-2 py-1 text-xs rounded-full border border-gray-300 text-gray-700';
+                    button.dataset.folder = trimmed;
+                    button.textContent = trimmed;
+                    button.addEventListener('click', () => setActiveFolder(trimmed));
+                    document.getElementById('folder-list').appendChild(button);
+                    setActiveFolder(trimmed);
+                });
+            }
+
+            addBtn.addEventListener('click', async function() {
+                const title = titleInput.value.trim();
+                const content = contentInput.value.trim();
+
+                if (!content) {
+                    alert('Please enter a note.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/companies/{{ company.ticker }}/notes/add/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ title, content, folder: currentFolder })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        if (noNotesMsg) {
+                            noNotesMsg.remove();
+                        }
+
+                        const noteEl = document.createElement('div');
+                        noteEl.className = 'note-item border-b border-gray-100 pb-3';
+                        noteEl.dataset.folder = data.folder || '';
+                        noteEl.innerHTML = `
+                            ${data.title ? `<h3 class="font-medium text-gray-900 text-sm">${data.title}</h3>` : ''}
+                            <p class="text-gray-700 text-sm whitespace-pre-wrap">${data.content}</p>
+                            <span class="text-xs text-gray-400">${data.created_at}</span>
+                        `;
+
+                        notesList.insertBefore(noteEl, notesList.firstChild);
+                        titleInput.value = '';
+                        contentInput.value = '';
+                        filterNotes();
+                    } else {
+                        alert(data.error || 'Failed to add note.');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Failed to add note.');
+                }
+            });
+
+            setActiveFolder('');
+        })();
+    </script>
+</body>
+</html>

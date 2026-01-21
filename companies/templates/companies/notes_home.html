@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes - TrackStack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <header class="bg-white shadow-sm">
+        <div class="w-full px-6 py-3 flex justify-between items-center gap-6">
+            <a href="/" class="flex items-center gap-2 text-gray-900 hover:text-blue-700">
+                <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 121.01 122.88" aria-hidden="true">
+                    <path d="M86.32,110,108.8,86.38H86.32V110ZM35.61,86.34a3.66,3.66,0,1,1,0-7.31H60a3.66,3.66,0,1,1,0,7.31Zm0-24.66a3.66,3.66,0,1,1,0-7.32H85.13a3.66,3.66,0,1,1,0,7.32Zm0-24.67a3.66,3.66,0,1,1,0-7.31H85.13a3.66,3.66,0,1,1,0,7.31Zm77.73,42V7.35H7.35V115.29H79V82.71A3.68,3.68,0,0,1,82.65,79ZM87,120a5.1,5.1,0,0,1-4.31,2.9,3.58,3.58,0,0,1-1.31-.24h-74a7.25,7.25,0,0,1-4.87-1.88l-.3-.26A7.29,7.29,0,0,1,0,115.33V7.31A7.31,7.31,0,0,1,7.31,0H113.39a7.32,7.32,0,0,1,7.3,7.31V81.2a3.66,3.66,0,0,1-.68,4L87,120Z"/>
+                </svg>
+                <span class="text-lg font-semibold">TrackStack</span>
+            </a>
+            <div class="flex items-center gap-6 flex-1 max-w-3xl">
+                <div class="relative w-full">
+                    <input type="text" id="header-search" placeholder="Search by name or ticker..."
+                           class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <ul id="header-results" class="absolute z-10 bg-white rounded-lg shadow divide-y mt-2 w-full hidden"></ul>
+                </div>
+                <a href="/notes/" class="text-sm font-medium text-blue-700">Notes</a>
+            </div>
+            <div class="ml-auto">
+                <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="text-sm text-blue-600 hover:text-blue-800">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <h1 class="text-2xl font-semibold text-gray-900 mb-6">Notes</h1>
+        <div class="grid grid-cols-4 gap-6">
+            <div class="col-start-1 row-start-1">
+                <button id="add-company-card" class="w-full h-32 rounded-lg border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center text-sm">
+                    Add a new company
+                </button>
+            </div>
+            {% for company in companies %}
+            <a href="/notes/{{ company.ticker }}/" class="block border border-gray-100 rounded-lg p-4 bg-white shadow-sm hover:border-blue-200 hover:bg-blue-50/30">
+                <div class="text-sm font-semibold text-gray-900">{{ company.name }}</div>
+                <div class="text-xs text-gray-500 mt-1">{{ company.ticker }}</div>
+                <div class="text-xs text-gray-500 italic mt-1">{{ company.note_count }} notes</div>
+            </a>
+            {% endfor %}
+        </div>
+    </main>
+
+    <div id="add-company-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-base font-semibold text-gray-900">Add a company</h2>
+                <button id="close-add-company" class="text-sm text-gray-500 hover:text-gray-700">Close</button>
+            </div>
+            <input type="text" id="add-company-search" placeholder="Search by name or ticker..."
+                   class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500">
+            <ul id="add-company-results" class="bg-white rounded-lg shadow divide-y mt-2 hidden"></ul>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const input = document.getElementById('header-search');
+            const results = document.getElementById('header-results');
+            if (!input || !results) return;
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim();
+                if (q.length < 1) { results.classList.add('hidden'); return; }
+
+                const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+                const data = await res.json();
+
+                if (data.length === 0) { results.classList.add('hidden'); return; }
+
+                results.innerHTML = data.map(c =>
+                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                        <span class="font-medium text-gray-900">${c.ticker}</span>
+                        <span class="text-gray-500">${c.name}</span>
+                    </a></li>`
+                ).join('');
+                results.classList.remove('hidden');
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            const addCard = document.getElementById('add-company-card');
+            const modal = document.getElementById('add-company-modal');
+            const closeBtn = document.getElementById('close-add-company');
+            const searchInput = document.getElementById('add-company-search');
+            const results = document.getElementById('add-company-results');
+            if (!addCard || !modal || !closeBtn || !searchInput || !results) return;
+
+            function openModal() {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                searchInput.value = '';
+                results.classList.add('hidden');
+                searchInput.focus();
+            }
+
+            function closeModal() {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+
+            addCard.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) closeModal();
+            });
+
+            searchInput.addEventListener('input', async () => {
+                const q = searchInput.value.trim();
+                if (q.length < 1) { results.classList.add('hidden'); return; }
+
+                const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+                const data = await res.json();
+
+                if (data.length === 0) { results.classList.add('hidden'); return; }
+
+                results.innerHTML = data.map(c =>
+                    `<li><button class="w-full text-left px-4 py-3 hover:bg-gray-50 add-company-item" data-ticker="${c.ticker}">
+                        <span class="font-medium text-gray-900">${c.ticker}</span>
+                        <span class="text-gray-500">${c.name}</span>
+                    </button></li>`
+                ).join('');
+                results.classList.remove('hidden');
+            });
+
+            results.addEventListener('click', async (event) => {
+                const btn = event.target.closest('.add-company-item');
+                if (!btn) return;
+                const ticker = btn.dataset.ticker;
+                const response = await fetch('/notes/add-company/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ ticker })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Failed to add company.');
+                    return;
+                }
+                closeModal();
+                window.location.href = `/notes/${data.ticker}/`;
+            });
+        })();
+    </script>
+</body>
+</html>
