@@ -6,7 +6,10 @@
       "Bash(.venv/Scripts/python.exe:*)",
       "Bash(.venv/Scripts/pip.exe install:*)",
       "Bash(curl:*)",
-      "WebFetch(domain:data.fca.org.uk)"
+      "WebFetch(domain:data.fca.org.uk)",
+      "Bash(python3:*)",
+      "Bash(python manage.py add_companies_from_cached_financials:*)",
+      "Bash(pip3 install:*)"
     ]
   }
 }

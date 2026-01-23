@@ -1,11 +1,19 @@
-from openai import OpenAI
-import os
 import json
-import csv
-import yfinance as yf
+import os
+import sys
+import time
+from pathlib import Path
 
-# Path to cached summaries JSON (relative to this script's location)
-CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "cached_summaries.json")
+import django
+from openai import OpenAI
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+django.setup()
+
+from django.db.models import Q as DQ  # noqa: E402
+from companies.models import Company  # noqa: E402
 
 DEV_MSGS = {
     "description":
@@ -95,7 +103,7 @@ DEV_MSGS = {
         - Search widely and creatively. Pull at small threads. Do searches that might turn up unexpected things, like "[CEO name] scandal" or "[Company] whistleblower"
         - Before finalising your answer, carefully consider the item(s) - are they GENUINELY big and decision-relevant? If not, discard.
         - If none of (a)-(k) apply, output nothing beyond a brief statement like: "No decision-relevant special-situation items found in the last 12 months."
-        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events. Do not state "omit". Your direct response to this prompt will be displayed to users. Simply ignore all that do not apply. 
+        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events.
         - DO NOT pad output with routine results, normal trading updates, small contracts, minor dividends, standard refinancing, routine board changes, or generic "strategy" commentary.
 
         EVIDENCE AND SOURCE BEHAVIOUR
@@ -123,191 +131,120 @@ DEV_MSGS = {
 }
 
 PROMPT = "Follow the instructions given. Company: "
-
-API_KEY = "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"
-
 CATEGORIES = ["description", "special_sits", "writeups"]
 
-
-def load_cache():
-    """Load existing cached summaries from JSON file."""
-    if os.path.exists(CACHE_PATH):
-        with open(CACHE_PATH, "r") as f:
-            return json.load(f)
-    return {}
+PRICING = {
+    "gpt-5-nano": {"input": 0.05, "output": 0.40},
+    "gpt-5-mini": {"input": 0.25, "output": 2.00},
+}
 
 
-def save_cache(cache):
-    """Save cached summaries to JSON file."""
-    with open(CACHE_PATH, "w") as f:
-        json.dump(cache, f, indent=2)
+def cost_from_usage(model, usage):
+    if not usage:
+        return 0.0
+    price = PRICING[model]
+    in_tokens = getattr(usage, "input_tokens", 0) or 0
+    out_tokens = getattr(usage, "output_tokens", 0) or 0
+    return (in_tokens / 1_000_000) * price["input"] + (out_tokens / 1_000_000) * price["output"]
 
 
-def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
-    """Call OpenAI API to generate a summary for the given category and ticker."""
-    client = OpenAI(api_key=API_KEY)
+def pick_three_companies():
+    qs = Company.objects.filter(
+        description="",
+        special_sits="",
+        writeups=[],
+    ).order_by("ticker")
+    companies = list(qs[:3])
+    if len(companies) >= 3:
+        return companies, "all_empty"
 
-    dev_msg = DEV_MSGS[category]
-
-    try:
-        yf_ticker = yf.Ticker(f"{ticker}.L")
-        info = yf_ticker.get_info()
-        name = info["longName"]
-    except Exception as e:
-        print(e)
-        name = f"The company with the ticker LSE:{ticker}"
-
-    try:
-        response = client.responses.create(
-            model=model,
-            tools=[{"type": "web_search"}],
-            reasoning={"effort": effort},
-            input=[
-                {
-                    "role": "developer",
-                    "content": dev_msg
-                },
-                {
-                    "role": "user",
-                    "content": PROMPT + name
-                }
-            ]
-        )
-
-        # Calculate and print cost
-        usage = response.usage
-        if usage:
-            input_tokens = usage.input_tokens or 0
-            output_tokens = usage.output_tokens or 0
-            pricing = {
-                "gpt-5.2": {"input": 2.50, "output": 10.00},
-                "gpt-5-mini": {"input": 0.30, "output": 1.20},
-                "gpt-4o": {"input": 2.50, "output": 10.00},
-                "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-            }
-            rates = pricing.get(model, {"input": 2.50, "output": 10.00})
-            cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
-            print(f"  Tokens: {input_tokens} in / {output_tokens} out | Cost: ${cost:.6f}")
-
-        return response.output_text
-
-    except Exception as e:
-        print(f"GPT call failed for {ticker} ({category}).\nCause: {e}")
-        return None
+    qs_fallback = Company.objects.filter(
+        DQ(description="") | DQ(special_sits="") | DQ(writeups=[])
+    ).order_by("ticker")
+    companies = list(qs_fallback[:3])
+    return companies, "partial_empty"
 
 
-def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
-    """
-    Generate AI summaries for a single ticker and save to cache.
+def main():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Missing OPENAI_API_KEY")
+    client = OpenAI(api_key=api_key, timeout=120)
 
-    Args:
-        ticker: Stock ticker symbol (e.g., "LLOY")
-        categories: List of categories to generate. Defaults to all categories.
-        overwrite: If False, skip categories that already exist in cache.
-                   If True, regenerate and replace existing summaries.
-        model: OpenAI model to use.
-        effort: Reasoning effort level (low, medium, high).
+    companies, selection_mode = pick_three_companies()
+    if len(companies) < 3:
+        raise RuntimeError("Need at least 3 companies with missing summaries.")
 
-    Returns:
-        dict: The updated summaries for this ticker.
-    """
-    if categories is None:
-        categories = CATEGORIES
+    report_path = BASE_DIR / "nano_vs_mini.txt"
+    report_lines = [f"Selection mode: {selection_mode}"]
+    report_path.write_text("\n".join(report_lines) + "\n")
+    mini_cache_updates = {}
+    for model in ["gpt-5-nano", "gpt-5-mini"]:
+        report_lines.append(f"Model: {model}")
+        report_path.write_text("\n".join(report_lines) + "\n")
+        total_cost = 0.0
+        for company in companies:
+            report_lines.append(f"- {company.ticker} {company.name}")
+            report_path.write_text("\n".join(report_lines) + "\n")
+            mini_cache_updates.setdefault(company.ticker, {})
+            for category in CATEGORIES:
+                attempts = 0
+                while attempts < 2:
+                    attempts += 1
+                    try:
+                        print(f"{model} {company.ticker} {category} (attempt {attempts})", flush=True)
+                        response = client.responses.create(
+                            model=model,
+                            input=[
+                                {"role": "developer", "content": DEV_MSGS[category]},
+                                {"role": "user", "content": PROMPT + company.name},
+                            ],
+                            max_output_tokens=1200,
+                        )
+                        output = response.output_text
+                        usage = response.usage
+                        cost = cost_from_usage(model, usage)
+                        total_cost += cost
+                        report_lines.append(f"  {category}: ${cost:.6f}")
+                        report_path.write_text("\n".join(report_lines) + "\n")
+                        if model == "gpt-5-mini":
+                            mini_cache_updates[company.ticker][category] = output
+                        break
+                    except Exception as exc:
+                        if attempts >= 2:
+                            report_lines.append(f"  {category}: FAILED ({exc})")
+                            report_path.write_text("\n".join(report_lines) + "\n")
+                        time.sleep(2)
+        report_lines.append(f"Total {model}: ${total_cost:.6f}")
+        report_lines.append("")
+        report_path.write_text("\n".join(report_lines) + "\n")
 
-    cache = load_cache()
+    cache_path = BASE_DIR / "cached_summaries.json"
+    if cache_path.exists():
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        cache = {}
+    for ticker, payload in mini_cache_updates.items():
+        cache.setdefault(ticker, {})
+        cache[ticker].update(payload)
+    cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
 
-    if ticker not in cache:
-        cache[ticker] = {}
-
-    for category in categories:
-        # Check if we should skip this category
-        if not overwrite and category in cache[ticker] and cache[ticker][category]:
-            print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+    # Persist mini results to DB
+    for ticker, payload in mini_cache_updates.items():
+        try:
+            company = Company.objects.get(ticker=ticker)
+        except Company.DoesNotExist:
             continue
+        if "description" in payload:
+            company.description = payload["description"]
+        if "special_sits" in payload:
+            company.special_sits = payload["special_sits"]
+        if "writeups" in payload:
+            company.writeups = payload["writeups"]
+        company.save()
 
-        print(f"Generating {category} for {ticker}...")
-        result = ask_gpt(category, ticker, model=model, effort=effort)
-
-        if result is not None:
-            # For writeups, parse the list from the response
-            if category == "writeups":
-                try:
-                    # Try to parse as Python list
-                    parsed = eval(result)
-                    if isinstance(parsed, list):
-                        result = parsed
-                    else:
-                        result = []
-                except:
-                    # If parsing fails, store empty list
-                    print(f"Warning: Could not parse writeups response for {ticker}")
-                    result = []
-
-            cache[ticker][category] = result
-            save_cache(cache)  # Save after each successful generation
-            print(f"Saved {category} for {ticker}")
-        else:
-            print(f"Failed to generate {category} for {ticker}")
-
-    return cache.get(ticker, {})
-
-
-def generate_summaries_for_tickers(tickers, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
-    """
-    Generate AI summaries for multiple tickers.
-
-    Args:
-        tickers: List of ticker symbols.
-        categories: List of categories to generate. Defaults to all categories.
-        overwrite: If False, skip categories that already exist in cache.
-        model: OpenAI model to use.
-        effort: Reasoning effort level (low, medium, high).
-    """
-    for ticker in tickers:
-        print(f"\n{'='*50}")
-        print(f"Processing {ticker}")
-        print('='*50)
-        generate_summaries_for_ticker(ticker, categories, overwrite, model, effort)
-
-
-def load_tickers_from_csv(csv_path=None):
-    """Load ticker list from CSV file."""
-    if csv_path is None:
-        csv_path = os.path.join(os.path.dirname(__file__), "..", "tickers.csv")
-
-    with open(csv_path) as f:
-        return [row[0] for row in csv.reader(f)]
-
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-#
-# Generate all summaries for a single ticker (skips if existing ticker + category combo exists in cache):
-#     generate_summaries_for_ticker("LLOY")
-#
-# Generate only description for a ticker (ditto):
-#     generate_summaries_for_ticker("LLOY", categories=["description"])
-#
-# Overwrite existing summaries:
-#     generate_summaries_for_ticker("LLOY", overwrite=True)
-#
-# Generate for all tickers in tickers.csv:
-#     tickers = load_tickers_from_csv()
-#     generate_summaries_for_tickers(tickers)
-#
-# Generate for specific tickers:
-#     generate_summaries_for_tickers(["LLOY", "BARC", "HSBA"])
-#
-# ============================================================================
+    print("Done. Report written to nano_vs_mini.txt and DB updated with mini results.")
 
 
 if __name__ == "__main__":
-
-    tickers = load_tickers_from_csv()
-    generate_summaries_for_tickers(tickers, overwrite=False, model="gpt-4.1")
-
-    # Test run for a single ticker:
-    # generate_summaries_for_ticker("LLOY", overwrite=False, model="gpt-4.1")
-
-    pass
+    main()

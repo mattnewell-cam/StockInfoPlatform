@@ -19,7 +19,7 @@ def send_verification_email(to_email: str, code: str) -> bool:
             "https://api.brevo.com/v3/smtp/email",
             headers={"api-key": api_key, "content-type": "application/json"},
             json={
-                "sender": {"name": "TrackStack", "email": "verify@trackstack.uk"},
+                "sender": {"name": "Tearsheet", "email": "verify@tearsheet.one"},
                 "to": [{"email": to_email}],
                 "subject": "Your Tearsheet verification code",
                 "htmlContent": f'<p>Your verification code is: <strong>{code}</strong></p><p>Expires in 15 minutes.</p>',

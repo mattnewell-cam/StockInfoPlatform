@@ -18,20 +18,21 @@ from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 
-from companies.views import signup, verify_email, home, search_api
+from companies.views import signup, verify_email, home, search_api, logout_view
 from companies import views as company_views
 
 
 urlpatterns = [
     path('', home, name='home'),
     path('api/search/', search_api, name='search_api'),
+    path('api/newsfeed/', company_views.newsfeed_api, name='newsfeed_api'),
     path('notes/', company_views.notes_home, name='notes_home'),
     path('notes/add-company/', company_views.notes_add_company, name='notes_add_company'),
     path('notes/<str:ticker>/', company_views.notes_company, name='notes_company'),
     path('admin/', admin.site.urls),
     path('companies/', include(('companies.urls', 'companies'), namespace='companies')),
     path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
+    path('logout/', logout_view, name='logout'),
     path('signup/', signup, name='signup'),
     path('verify/', verify_email, name='verify_email'),
 ]

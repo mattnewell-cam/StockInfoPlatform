@@ -24,7 +24,7 @@
                 <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 121.01 122.88" aria-hidden="true">
                     <path d="M86.32,110,108.8,86.38H86.32V110ZM35.61,86.34a3.66,3.66,0,1,1,0-7.31H60a3.66,3.66,0,1,1,0,7.31Zm0-24.66a3.66,3.66,0,1,1,0-7.32H85.13a3.66,3.66,0,1,1,0,7.32Zm0-24.67a3.66,3.66,0,1,1,0-7.31H85.13a3.66,3.66,0,1,1,0,7.31Zm77.73,42V7.35H7.35V115.29H79V82.71A3.68,3.68,0,0,1,82.65,79ZM87,120a5.1,5.1,0,0,1-4.31,2.9,3.58,3.58,0,0,1-1.31-.24h-74a7.25,7.25,0,0,1-4.87-1.88l-.3-.26A7.29,7.29,0,0,1,0,115.33V7.31A7.31,7.31,0,0,1,7.31,0H113.39a7.32,7.32,0,0,1,7.3,7.31V81.2a3.66,3.66,0,0,1-.68,4L87,120Z"/>
                 </svg>
-                <span class="text-lg font-semibold">TrackStack</span>
+                <span class="text-lg font-semibold">Tearsheet</span>
             </a>
             <div class="flex items-center gap-6 flex-1 max-w-3xl">
                 <div class="relative w-full">
@@ -37,7 +37,10 @@
             <div class="ml-auto">
                 {% if user.is_authenticated %}
                     <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
-                    <a href="{% url 'logout' %}" class="text-sm text-blue-600 hover:text-blue-800">Logout</a>
+                    <form method="post" action="{% url 'logout' %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-sm text-blue-600 hover:text-blue-800">Logout</button>
+                    </form>
                 {% else %}
                     <a href="{% url 'login' %}?next={{ request.path }}" class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">Login</a>
                 {% endif %}

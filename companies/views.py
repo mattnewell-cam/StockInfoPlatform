@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth import login
+from django.contrib.auth import login, logout as auth_logout
 from django.contrib import messages
 from collections import defaultdict
 import json
@@ -31,6 +31,55 @@ def search_api(request):
         return JsonResponse([], safe=False)
     results = Company.objects.filter(Q(name__icontains=q) | Q(ticker__icontains=q))[:10]
     return JsonResponse([{'ticker': c.ticker, 'name': c.name} for c in results], safe=False)
+
+
+def newsfeed_api(request):
+    """Fetch latest FCA NSM filings, optionally filtered by type."""
+    types_param = request.GET.get("types", "").strip()
+    size = min(max(int(request.GET.get("size", 50)), 1), 200)
+
+    payload = {
+        "from": 0,
+        "size": size,
+        "sort": "submitted_date",
+        "sortorder": "desc",
+        "criteriaObj": {"criteria": [{"name": "latest_flag", "value": "Y"}]},
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.data.fca.org.uk/search",
+            headers={"Accept": "application/json", "Content-Type": "application/json",
+                     "Origin": "https://data.fca.org.uk", "Referer": "https://data.fca.org.uk/"},
+            params={"index": "fca-nsm-searchdata"},
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        return JsonResponse({"error": str(e)}, status=502)
+
+    hits = resp.json().get("hits", {}).get("hits", [])
+    selected = {t.strip().lower() for t in types_param.split(",") if t.strip()}
+
+    items, types = [], set()
+    for hit in hits:
+        info = hit.get("_source", {})
+        rns_type = info.get("type", "")
+        if rns_type:
+            types.add(rns_type)
+        if selected and rns_type.lower() not in selected:
+            continue
+        dl = info.get("download_link", "")
+        items.append({
+            "type": rns_type,
+            "headline": info.get("headline") or info.get("title") or "",
+            "company": info.get("company") or info.get("company_name") or "",
+            "date": info.get("submitted_date") or "",
+            "url": f"https://data.fca.org.uk/artefacts/{dl}" if dl else "",
+        })
+
+    return JsonResponse({"items": items, "types": sorted(types)})
 
 
 def regulatory_newsfeed(request, ticker):
@@ -522,6 +571,22 @@ def chat_send_message(request, ticker, session_id):
             input=messages,
         )
         assistant_text = response.output_text
+
+        # Calculate cost
+        usage = response.usage
+        input_tokens = usage.input_tokens if usage else 0
+        output_tokens = usage.output_tokens if usage else 0
+        # Pricing per 1M tokens (as of 2024)
+        pricing = {
+            "gpt-4o": {"input": 2.50, "output": 10.00},
+            "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+            "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+            "gpt-4": {"input": 30.00, "output": 60.00},
+            "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+        }
+        rates = pricing.get(model, {"input": 0.15, "output": 0.60})
+        cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+
     except Exception as exc:
         return JsonResponse({"error": f"OpenAI request failed: {exc}"}, status=502)
 
@@ -545,6 +610,7 @@ def chat_send_message(request, ticker, session_id):
             "content": assistant_message.content,
             "created_at": assistant_message.created_at.strftime("%d/%m/%Y, %I:%M %p"),
         },
+        "cost": {"input_tokens": input_tokens, "output_tokens": output_tokens, "usd": round(cost, 6)},
     })
 
 
@@ -771,6 +837,12 @@ def add_message(request, ticker, thread_id):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+def logout_view(request):
+    """Log out the user and redirect to home."""
+    auth_logout(request)
+    return redirect('/')
 
 
 def signup(request):

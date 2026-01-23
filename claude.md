@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Tearsheet is a Django web app for small-cap investors to search companies and view financials, pricing charts, AI summaries, and personal notes.
+TrackStack is a Django web app for small-cap investors to search companies and view financials, pricing charts, AI summaries, discussion threads, AI chat, and personal notes.
 
-**Status:** MVP in progress. Data ingestion, auth, and company detail views are working; AI summaries are cached and loadable.
+**Status:** MVP in progress. Data ingestion, auth, company detail views, discussion, notes hub, and AI chat are working; AI summaries are cached and loadable.
 
 ## Tech Stack
 
@@ -13,7 +13,7 @@ Tearsheet is a Django web app for small-cap investors to search companies and vi
 - SQLite (db.sqlite3)
 - yfinance (company metadata + pricing)
 - Selenium (QuickFS scraping)
-- OpenAI API (summaries script)
+- OpenAI API (summaries script + in-app chat)
 - python-dotenv (loads .env)
 - Requests (Brevo email API)
 - Tailwind CDN, marked, lightweight-charts (frontend)
@@ -32,6 +32,8 @@ companies/              # Main Django app
     companies/home.html
     companies/company_detail.html
     companies/statement_table.html
+    companies/notes_home.html
+    companies/notes_company.html
     registration/*.html
 scripts/                # Standalone scripts (not Django)
   pull_financials.py     # QuickFS scrape -> cached_financials.json
@@ -62,15 +64,18 @@ python manage.py update_prices --ticker TICKER --full --years 10
 ## Key Features
 
 - Home search with typeahead (`/api/search`)
-- Company detail with financial statements and price charts (line/candlestick)
+- Company detail with price charts, collapsible financial statements, AI chat, and notes
+- Discussion threads and messages (threads + all-messages views)
+- Regulatory newsfeed (FCA NSM) with filtering + pagination
+- Notes hub at `/notes/` with company grid and foldered notes per company
 - Markdown rendering for descriptions and special situations
-- User notes per company (auth required)
 - Email verification signup (Brevo)
 
 ## Environment
 
 - `.env` loaded via python-dotenv
 - `EMAIL_API_KEY` required for verification emails
+- `OPENAI_API_KEY` required for in-app chat (optionally `OPENAI_MODEL`)
 - OpenAI key required for `scripts/generate_AI_summaries.py` (currently hardcoded)
 
 ## Files to Ignore
