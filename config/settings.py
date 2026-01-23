@@ -32,8 +32,11 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes", "on"}
 
-allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    "tearsheet.one",
+    "www.tearsheet.one",
+    "tearsheet-ap7c.onrender.com",
+]
 
 
 # Application definition
