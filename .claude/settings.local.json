@@ -9,7 +9,10 @@
       "WebFetch(domain:data.fca.org.uk)",
       "Bash(python3:*)",
       "Bash(python manage.py add_companies_from_cached_financials:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(sqlite3:*)",
+      "Bash(/tmp/pgvenv/bin/pip install:*)",
+      "Bash(export DATABASE_URL:*)"
     ]
   }
 }
