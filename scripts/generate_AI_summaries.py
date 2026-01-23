@@ -124,8 +124,7 @@ DEV_MSGS = {
 
 PROMPT = "Follow the instructions given. Company: "
 
-API_KEY = "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"
-
+API_KEY = os.getenv("OPENAI_API_KEY")
 CATEGORIES = ["description", "special_sits", "writeups"]
 
 
