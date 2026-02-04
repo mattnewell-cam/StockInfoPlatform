@@ -1,18 +1,33 @@
 from django.core.management.base import BaseCommand
-import json
-from companies.models import Company
-import yfinance as yf
 import csv
-from datetime import datetime, timezone
+from scripts.pull_financials import save_bulk_financials
 
 class Command(BaseCommand):
-    help = "Add all company financials from a local json to the database."
+    help = "Fetch QuickFS financials and save directly to the database."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--tickers-csv",
+            default="ftse_tickers.csv",
+            help="Path to CSV with tickers (default: ftse_tickers.csv)",
+        )
+        parser.add_argument(
+            "--overwrite",
+            action="store_true",
+            help="Overwrite existing financials in the DB for each ticker",
+        )
+        parser.add_argument(
+            "--ticker",
+            type=str,
+            help="Only update a specific ticker",
+        )
 
     def handle(self, *args, **options):
-        with open("cached_financials.json", "r", encoding="utf-8") as f:
-            all_financials = json.load(f)
-            for ticker, financials in all_financials.items():
-                print(ticker)
-                company = Company.objects.filter(ticker=ticker)[0]
-                print(company)
-                company.pass_annual_financials(financials)
+        ticker = options.get("ticker")
+        if ticker:
+            tickers = [ticker]
+        else:
+            with open(options["tickers_csv"]) as f:
+                tickers = [l[0] for l in list(csv.reader(f))]
+
+        save_bulk_financials(tickers, overwrite=options.get("overwrite", False))

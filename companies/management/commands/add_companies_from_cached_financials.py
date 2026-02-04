@@ -1,33 +1,32 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company
-import json
+import csv
 import yfinance as yf
 from datetime import datetime, timezone
 
 
 class Command(BaseCommand):
-    help = "Add companies from cached_financials.json that are missing from the database."
+    help = "Add companies from a tickers CSV that are missing from the database."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--cache-path',
+            '--tickers-csv',
             type=str,
-            default='cached_financials.json',
-            help='Path to cached_financials.json (default: cached_financials.json)'
+            default='tickers.csv',
+            help='Path to tickers CSV (default: tickers.csv)'
         )
 
     def handle(self, *args, **options):
-        cache_path = options.get('cache_path')
+        tickers_csv = options.get('tickers_csv')
         try:
-            with open(cache_path, "r", encoding="utf-8") as f:
-                cached = json.load(f)
+            with open(tickers_csv) as f:
+                tickers = [row[0] for row in csv.reader(f)]
         except Exception as e:
-            self.stderr.write(self.style.ERROR(f"Failed to read cache: {e}"))
+            self.stderr.write(self.style.ERROR(f"Failed to read tickers CSV: {e}"))
             return
 
-        tickers = sorted(cached.keys())
         if not tickers:
-            self.stdout.write("No tickers in cache.")
+            self.stdout.write("No tickers in CSV.")
             return
 
         added = 0

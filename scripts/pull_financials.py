@@ -1,6 +1,7 @@
 import argparse
 import csv
-import json
+import os
+import sys
 import time
 from pathlib import Path
 
@@ -13,7 +14,30 @@ from selenium.common.exceptions import StaleElementReferenceException, TimeoutEx
 URL = "https://quickfs.net"
 
 BASE_DIR = Path(__file__).resolve().parent
-CACHE_PATH = (BASE_DIR / ".." / "cached_financials.json").resolve()
+
+
+def ensure_django():
+    project_root = BASE_DIR.parent
+    if str(project_root) not in sys.path:
+        sys.path.append(str(project_root))
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    try:
+        import django
+        from django.apps import apps
+        if not apps.ready:
+            django.setup()
+    except Exception:
+        import django
+        django.setup()
+
+
+def get_company(ticker):
+    ensure_django()
+    from companies.models import Company
+    try:
+        return Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return None
 
 
 def wait_for(driver, by, value, timeout=20):
@@ -158,22 +182,9 @@ def pull_financials(driver, ticker):
     return rows_by_statement
 
 
-def load_cache(path):
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_cache(path, data):
-    tmp_path = path.with_suffix(".json.tmp")
-    with tmp_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    tmp_path.replace(path)
-
-
-def cache_bulk_financials(tickers, cache_path, overwrite=False, retry_once=True):
-    all_financials = load_cache(cache_path)
+def save_bulk_financials(tickers, overwrite=False, retry_once=True):
+    ensure_django()
+    from companies.models import Financial
 
     def start_driver():
         driver = webdriver.Chrome()
@@ -187,8 +198,12 @@ def cache_bulk_financials(tickers, cache_path, overwrite=False, retry_once=True)
         t = t.strip()
         if not t:
             continue
-        if t in all_financials and not overwrite:
-            print(f"{t} already cached. Skipping.")
+        company = get_company(t)
+        if not company:
+            print(f"{t} not found in DB. Skipping.")
+            continue
+        if not company.FYE_month:
+            print(f"{t} missing FYE_month. Skipping.")
             continue
         try:
             financials = pull_financials(driver, t)
@@ -220,8 +235,10 @@ def cache_bulk_financials(tickers, cache_path, overwrite=False, retry_once=True)
                 print(f"Fetching financials failed for {t}, cause: {e}")
                 continue
 
-        all_financials[t] = financials
-        save_cache(cache_path, all_financials)
+        if overwrite:
+            Financial.objects.filter(company=company).delete()
+        company.pass_annual_financials(financials)
+        print(f"Saved financials for {t}")
 
     try:
         driver.quit()
@@ -229,29 +246,27 @@ def cache_bulk_financials(tickers, cache_path, overwrite=False, retry_once=True)
         pass
 
 
+def load_tickers_from_csv(path):
+    with open(path) as f:
+        return [l[0] for l in list(csv.reader(f))]
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Fetch QuickFS financials and update cache.")
+    parser = argparse.ArgumentParser(description="Fetch QuickFS financials and save to the DB.")
     parser.add_argument(
         "--tickers-csv",
         default=str((BASE_DIR / ".." / "ftse_tickers.csv").resolve()),
         help="Path to CSV with tickers (default: ftse_tickers.csv in repo root)",
     )
     parser.add_argument(
-        "--cache-path",
-        default=str(CACHE_PATH),
-        help="Path to cached_financials.json",
-    )
-    parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing cached tickers",
+        help="Overwrite existing financials in the DB for each ticker",
     )
     args = parser.parse_args()
 
-    with open(args.tickers_csv) as f:
-        tickers = [l[0] for l in list(csv.reader(f))]
-
-    cache_bulk_financials(tickers, Path(args.cache_path), overwrite=args.overwrite)
+    tickers = load_tickers_from_csv(args.tickers_csv)
+    save_bulk_financials(tickers, overwrite=args.overwrite)
 
 
 if __name__ == "__main__":

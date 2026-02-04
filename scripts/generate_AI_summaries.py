@@ -1,11 +1,9 @@
 from openai import OpenAI
 import os
-import json
+import sys
 import csv
+from pathlib import Path
 import yfinance as yf
-
-# Path to cached summaries JSON (relative to this script's location)
-CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "cached_summaries.json")
 
 DEV_MSGS = {
     "description":
@@ -128,18 +126,31 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 CATEGORIES = ["description", "special_sits", "writeups"]
 
 
-def load_cache():
-    """Load existing cached summaries from JSON file."""
-    if os.path.exists(CACHE_PATH):
-        with open(CACHE_PATH, "r") as f:
-            return json.load(f)
-    return {}
+BASE_DIR = Path(__file__).resolve().parent
 
 
-def save_cache(cache):
-    """Save cached summaries to JSON file."""
-    with open(CACHE_PATH, "w") as f:
-        json.dump(cache, f, indent=2)
+def ensure_django():
+    project_root = BASE_DIR.parent
+    if str(project_root) not in sys.path:
+        sys.path.append(str(project_root))
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    try:
+        import django
+        from django.apps import apps
+        if not apps.ready:
+            django.setup()
+    except Exception:
+        import django
+        django.setup()
+
+
+def get_company(ticker):
+    ensure_django()
+    from companies.models import Company
+    try:
+        return Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return None
 
 
 def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
@@ -197,7 +208,7 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
 
 def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
     """
-    Generate AI summaries for a single ticker and save to cache.
+    Generate AI summaries for a single ticker and save to the DB.
 
     Args:
         ticker: Stock ticker symbol (e.g., "LLOY")
@@ -213,16 +224,25 @@ def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, mode
     if categories is None:
         categories = CATEGORIES
 
-    cache = load_cache()
+    company = get_company(ticker)
+    if not company:
+        print(f"{ticker} not found in DB. Skipping.")
+        return {}
 
-    if ticker not in cache:
-        cache[ticker] = {}
-
+    updated = {}
     for category in categories:
-        # Check if we should skip this category
-        if not overwrite and category in cache[ticker] and cache[ticker][category]:
-            print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
-            continue
+        if category == "description":
+            if not overwrite and company.description:
+                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+                continue
+        elif category == "special_sits":
+            if not overwrite and company.special_sits:
+                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+                continue
+        elif category == "writeups":
+            if not overwrite and company.writeups:
+                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+                continue
 
         print(f"Generating {category} for {ticker}...")
         result = ask_gpt(category, ticker, model=model, effort=effort)
@@ -242,13 +262,20 @@ def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, mode
                     print(f"Warning: Could not parse writeups response for {ticker}")
                     result = []
 
-            cache[ticker][category] = result
-            save_cache(cache)  # Save after each successful generation
+            if category == "description":
+                company.description = result
+            elif category == "special_sits":
+                company.special_sits = result
+            elif category == "writeups":
+                company.writeups = result
+
+            company.save(update_fields=[category])
+            updated[category] = result
             print(f"Saved {category} for {ticker}")
         else:
             print(f"Failed to generate {category} for {ticker}")
 
-    return cache.get(ticker, {})
+    return updated
 
 
 def generate_summaries_for_tickers(tickers, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
@@ -272,7 +299,7 @@ def generate_summaries_for_tickers(tickers, categories=None, overwrite=False, mo
 def load_tickers_from_csv(csv_path=None):
     """Load ticker list from CSV file."""
     if csv_path is None:
-        csv_path = os.path.join(os.path.dirname(__file__), "..", "tickers.csv")
+        csv_path = str((BASE_DIR / ".." / "tickers.csv").resolve())
 
     with open(csv_path) as f:
         return [row[0] for row in csv.reader(f)]
