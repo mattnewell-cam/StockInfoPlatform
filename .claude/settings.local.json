@@ -12,7 +12,11 @@
       "Bash(pip3 install:*)",
       "Bash(sqlite3:*)",
       "Bash(/tmp/pgvenv/bin/pip install:*)",
-      "Bash(export DATABASE_URL:*)"
+      "Bash(export DATABASE_URL:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(pip3 show:*)",
+      "Bash(/mnt/c/Users/matth/PycharmProjects/StockInfoPlatform/scripts/chromedriver.exe:*)"
     ]
   }
 }

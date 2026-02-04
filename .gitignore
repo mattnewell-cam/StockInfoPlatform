@@ -4,3 +4,7 @@
 db.sqlite3
 tickers.csv
 ToDo.txt
+backup.json
+*.sql
+ftse_tickers.csv
+model_comparison.txt

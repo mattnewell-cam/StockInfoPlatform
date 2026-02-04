@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 import csv
-from scripts.pull_financials import save_bulk_financials
+from scripts.pull_financials_qfs import save_bulk_financials
 
 class Command(BaseCommand):
     help = "Fetch QuickFS financials and save directly to the database."
