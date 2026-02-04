@@ -13,10 +13,15 @@ from selenium.webdriver.support import expected_conditions as EC
 
 URL = "https://fiscal.ai"
 FAST_MODE_DEFAULT = True
-DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
-FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 
 BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
+FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
+DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
+USE_TEST_TICKER = False
+TEST_TICKER_DEFAULT = "LSE-SHEL"
+SKIP_IF_CACHED = True
+SKIP_IF_FAILED = True
 
 
 def ensure_django():
@@ -195,9 +200,9 @@ def load_statement_table(driver, ticker, slug, expand_slider=True, fast_mode=Fal
 
 
 STATEMENT_SLUGS = {
-    "IS": ["income-statement", "income"],
-    "BS": ["balance-sheet", "balance"],
-    "CF": ["cash-flow-statement", "cash-flow-statement", "cashflow-statement"],
+    "IS": ["income-statement"],
+    "BS": ["balance-sheet"],
+    "CF": ["cash-flow-statement"],
 }
 
 
@@ -239,6 +244,18 @@ def save_cached_json(path, data):
         json.dump(data, f, indent=2)
 
 
+def load_failed_set(path):
+    if not Path(path).exists():
+        return set()
+    failed = set()
+    with open(path, newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row:
+                failed.add(row[0])
+    return failed
+
+
 def main():
     parser = argparse.ArgumentParser(description="Fetch fiscal.ai financials and store in cached_financials.json.")
     parser.add_argument(
@@ -249,13 +266,13 @@ def main():
     parser.add_argument(
         "--ticker",
         type=str,
-        default="LSE-SHEL",
+        default=TEST_TICKER_DEFAULT,
         help="Only update a specific ticker",
     )
     parser.add_argument(
         "--tickers-csv",
-        default=str((BASE_DIR / ".." / "ftse_100_tickers.csv").resolve()),
-        help="Path to CSV with tickers (default: ftse_100_tickers.csv in repo root)",
+        default=DEFAULT_TICKERS_CSV,
+        help="Path to CSV with tickers (default: lse_all_tickers.csv in repo root)",
     )
     parser.add_argument(
         "--use-csv",
@@ -317,7 +334,8 @@ def main():
         print("Successfully logged in.")
         print(f"Current URL: {driver.current_url}")
 
-        if args.use_csv:
+        use_csv = args.use_csv or not USE_TEST_TICKER
+        if use_csv:
             with open(args.tickers_csv, newline="") as f:
                 tickers = [row[0] for row in csv.reader(f) if row]
         elif args.ticker:
@@ -326,10 +344,17 @@ def main():
             tickers = []
 
         cached = load_cached_json(args.out_json)
+        failed_existing = load_failed_set(args.failed_csv)
 
         failed = []
         for t in tickers:
             if not t:
+                continue
+            if SKIP_IF_FAILED and t in failed_existing:
+                print(f"{t} is in failed list. Skipping.")
+                continue
+            if SKIP_IF_CACHED and t in cached:
+                print(f"{t} already cached. Skipping.")
                 continue
             if args.no_overwrite and t in cached:
                 print(f"{t} already cached. Skipping.")
@@ -349,13 +374,16 @@ def main():
             except Exception as e:
                 print(f"Failed {t}: {e}")
                 failed.append(t)
+                failed_existing.add(t)
+                try:
+                    with open(args.failed_csv, "a", newline="") as f:
+                        writer = csv.writer(f)
+                        writer.writerow([t])
+                except Exception as write_exc:
+                    print(f"Failed to write {t} to {args.failed_csv}: {write_exc}")
 
         if failed:
-            with open(args.failed_csv, "w", newline="") as f:
-                writer = csv.writer(f)
-                for t in failed:
-                    writer.writerow([t])
-            print(f"Wrote failures to {args.failed_csv}")
+            print(f"Appended {len(failed)} failures to {args.failed_csv}")
 
         print("Done.")
     except Exception as e:

@@ -40,6 +40,7 @@ ALLOWED_HOSTS = [
     "tearsheet.one",
     "www.tearsheet.one",
     "tearsheet-ap7c.onrender.com",
+    "127.0.0.1",
 ]
 
 
@@ -152,6 +153,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Authentication
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = '/login/'
 
 # Logging - ensure errors show up in Render logs
 LOGGING = {
