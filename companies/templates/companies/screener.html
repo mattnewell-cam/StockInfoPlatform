@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screener - Tearsheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .multiselect-dropdown {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="w-full px-6 py-3 flex justify-between items-center gap-6">
+            <a href="/" class="flex items-center gap-2 text-gray-900 hover:text-blue-700">
+                <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 121.01 122.88" aria-hidden="true">
+                    <path d="M86.32,110,108.8,86.38H86.32V110ZM35.61,86.34a3.66,3.66,0,1,1,0-7.31H60a3.66,3.66,0,1,1,0,7.31Zm0-24.66a3.66,3.66,0,1,1,0-7.32H85.13a3.66,3.66,0,1,1,0,7.32Zm0-24.67a3.66,3.66,0,1,1,0-7.31H85.13a3.66,3.66,0,1,1,0,7.31Zm77.73,42V7.35H7.35V115.29H79V82.71A3.68,3.68,0,0,1,82.65,79ZM87,120a5.1,5.1,0,0,1-4.31,2.9,3.58,3.58,0,0,1-1.31-.24h-74a7.25,7.25,0,0,1-4.87-1.88l-.3-.26A7.29,7.29,0,0,1,0,115.33V7.31A7.31,7.31,0,0,1,7.31,0H113.39a7.32,7.32,0,0,1,7.3,7.31V81.2a3.66,3.66,0,0,1-.68,4L87,120Z"/>
+                </svg>
+                <span class="text-lg font-semibold">Tearsheet</span>
+            </a>
+            <div class="flex items-center gap-6 flex-1 max-w-3xl">
+                <div class="relative w-full">
+                    <input type="text" id="header-search" placeholder="Search by name or ticker..."
+                           class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <ul id="header-results" class="absolute z-10 bg-white rounded-lg shadow divide-y mt-2 w-full hidden"></ul>
+                </div>
+                <a href="/notes/" class="text-sm font-medium text-gray-700 hover:text-blue-700 whitespace-nowrap">Notes</a>
+                <a href="/screener/" class="text-sm font-medium text-blue-700 whitespace-nowrap">Screener</a>
+            </div>
+            <div class="ml-auto">
+                {% if user.is_authenticated %}
+                    <span class="text-sm text-gray-600 mr-4">{{ user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-sm text-blue-600 hover:text-blue-800">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-6">Stock Screener</h1>
+
+        <div class="grid grid-cols-4 gap-6">
+            <!-- Filters Sidebar -->
+            <div class="col-span-1">
+                <!-- Basic Filters -->
+                <div class="bg-white rounded-lg shadow p-5 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Basic Filters</h2>
+
+                    <!-- Country Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                        <div class="relative">
+                            <button type="button" id="country-toggle" class="w-full text-left px-3 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50">
+                                <span id="country-label">All countries</span>
+                            </button>
+                            <div id="country-dropdown" class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg hidden multiselect-dropdown">
+                                {% for country in countries %}
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input type="checkbox" class="country-option rounded border-gray-300 text-blue-600 mr-2" value="{{ country }}">
+                                    <span class="text-sm">{{ country }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Exchange Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Exchange</label>
+                        <div class="relative">
+                            <button type="button" id="exchange-toggle" class="w-full text-left px-3 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50">
+                                <span id="exchange-label">All exchanges</span>
+                            </button>
+                            <div id="exchange-dropdown" class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg hidden multiselect-dropdown">
+                                {% for exchange in exchanges %}
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input type="checkbox" class="exchange-option rounded border-gray-300 text-blue-600 mr-2" value="{{ exchange }}">
+                                    <span class="text-sm">{{ exchange }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sector Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                        <div class="relative">
+                            <button type="button" id="sector-toggle" class="w-full text-left px-3 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50">
+                                <span id="sector-label">All sectors</span>
+                            </button>
+                            <div id="sector-dropdown" class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg hidden multiselect-dropdown">
+                                {% for sector in sectors %}
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input type="checkbox" class="sector-option rounded border-gray-300 text-blue-600 mr-2" value="{{ sector }}">
+                                    <span class="text-sm">{{ sector }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Market Cap Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Market Cap</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="market-cap-min" placeholder="Min"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                            <span class="text-gray-500">-</span>
+                            <input type="number" id="market-cap-max" placeholder="Max"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                        </div>
+                    </div>
+
+                    <button id="apply-filters-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">
+                        Apply Filters
+                    </button>
+                </div>
+
+                <!-- Saved Screens -->
+                {% if user.is_authenticated %}
+                <div class="bg-white rounded-lg shadow p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">Saved Screens</h2>
+                        <button id="save-screen-btn" class="text-xs text-blue-600 hover:text-blue-800">Save Current</button>
+                    </div>
+                    <div id="saved-screens-list" class="space-y-2">
+                        {% for screen in saved_screens %}
+                        <div class="saved-screen-item flex items-center justify-between p-2 border border-gray-100 rounded-md hover:bg-gray-50" data-id="{{ screen.id }}">
+                            <button type="button" class="load-screen-btn text-sm text-gray-900 hover:text-blue-600 text-left flex-1">
+                                {{ screen.name }}
+                            </button>
+                            <button type="button" class="delete-screen-btn text-xs text-red-500 hover:text-red-700 ml-2">Delete</button>
+                        </div>
+                        {% empty %}
+                        <p class="text-sm text-gray-500" id="no-screens-msg">No saved screens yet.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="col-span-3">
+                <!-- Natural Language Query -->
+                <div class="bg-white rounded-lg shadow p-5 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-3">Natural Language Query</h2>
+                    <p class="text-sm text-gray-600 mb-3">
+                        Describe what you're looking for in plain English. Examples: "stocks with positive revenue growth",
+                        "companies where average operating margin last 3 years exceeds prior 5 years"
+                    </p>
+                    <textarea id="nl-query" rows="2" placeholder="e.g., stocks with revenue growth above 10% and positive free cash flow..."
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-3 resize-none focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    <div class="flex items-center gap-3">
+                        <button id="run-nl-query-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">
+                            Generate & Run
+                        </button>
+                        <span id="nl-loading" class="text-sm text-gray-500 hidden">Generating SQL...</span>
+                    </div>
+                </div>
+
+                <!-- SQL Preview -->
+                <div id="sql-preview-container" class="bg-white rounded-lg shadow mb-6 hidden">
+                    <button id="sql-toggle" class="w-full flex items-center justify-between px-5 py-3 text-left">
+                        <span class="text-sm font-medium text-gray-900">Generated SQL</span>
+                        <span id="sql-toggle-icon" class="text-gray-400">+</span>
+                    </button>
+                    <div id="sql-content" class="px-5 pb-4 hidden">
+                        <pre id="sql-preview" class="bg-gray-50 p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap"></pre>
+                        <button id="copy-sql-btn" class="mt-2 text-xs text-blue-600 hover:text-blue-800">Copy SQL</button>
+                    </div>
+                </div>
+
+                <!-- Error Display -->
+                <div id="error-container" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 hidden">
+                    <p class="text-sm text-red-700" id="error-message"></p>
+                </div>
+
+                <!-- Results Table -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-gray-900">Results</h2>
+                        <span id="results-count" class="text-sm text-gray-500">0 companies</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead id="results-header" class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticker</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exchange</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
+                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Market Cap</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-body" class="divide-y divide-gray-100">
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">
+                                        Apply filters or run a query to see results
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Screen Modal -->
+    <div id="save-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-5">
+            <h3 class="text-base font-semibold text-gray-900 mb-4">Save Screen</h3>
+            <input type="text" id="screen-name-input" placeholder="Screen name"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-4 focus:border-blue-500 focus:ring-blue-500">
+            <div class="flex items-center justify-end gap-2">
+                <button id="cancel-save-btn" class="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100">
+                    Cancel
+                </button>
+                <button id="confirm-save-btn" class="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Multi-select dropdown functionality
+            function setupMultiSelect(toggleId, dropdownId, labelId, optionClass, defaultLabel) {
+                const toggle = document.getElementById(toggleId);
+                const dropdown = document.getElementById(dropdownId);
+                const label = document.getElementById(labelId);
+
+                if (!toggle || !dropdown || !label) return;
+
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Close other dropdowns
+                    document.querySelectorAll('.multiselect-dropdown').forEach(d => {
+                        if (d !== dropdown) d.classList.add('hidden');
+                    });
+                    dropdown.classList.toggle('hidden');
+                });
+
+                dropdown.addEventListener('change', () => {
+                    const checked = Array.from(document.querySelectorAll('.' + optionClass + ':checked'));
+                    if (checked.length === 0) {
+                        label.textContent = defaultLabel;
+                    } else if (checked.length === 1) {
+                        label.textContent = checked[0].value;
+                    } else {
+                        label.textContent = checked.length + ' selected';
+                    }
+                });
+            }
+
+            setupMultiSelect('country-toggle', 'country-dropdown', 'country-label', 'country-option', 'All countries');
+            setupMultiSelect('exchange-toggle', 'exchange-dropdown', 'exchange-label', 'exchange-option', 'All exchanges');
+            setupMultiSelect('sector-toggle', 'sector-dropdown', 'sector-label', 'sector-option', 'All sectors');
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.multiselect-dropdown').forEach(d => d.classList.add('hidden'));
+            });
+
+            // Prevent dropdown close when clicking inside
+            document.querySelectorAll('.multiselect-dropdown').forEach(d => {
+                d.addEventListener('click', e => e.stopPropagation());
+            });
+
+            // Get selected values from multi-select
+            function getSelectedValues(optionClass) {
+                return Array.from(document.querySelectorAll('.' + optionClass + ':checked')).map(el => el.value);
+            }
+
+            // Format market cap for display
+            function formatMarketCap(value) {
+                if (!value && value !== 0) return 'N/A';
+                if (value >= 1e9) return (value / 1e9).toFixed(2) + 'B';
+                if (value >= 1e6) return (value / 1e6).toFixed(2) + 'M';
+                if (value >= 1e3) return (value / 1e3).toFixed(2) + 'K';
+                return value.toString();
+            }
+
+            // Escape HTML
+            function escapeHtml(value) {
+                if (value === null || value === undefined) return '';
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            // State
+            let currentResults = [];
+            let currentSql = '';
+            let currentFilters = {};
+            let currentNlQuery = '';
+
+            // Render results table
+            function renderResults(results, columns = null) {
+                const header = document.getElementById('results-header');
+                const body = document.getElementById('results-body');
+                const count = document.getElementById('results-count');
+
+                count.textContent = results.length + ' companies';
+
+                if (results.length === 0) {
+                    body.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">
+                                No companies match your criteria
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                // Determine columns from results
+                const cols = columns || Object.keys(results[0]);
+                const displayCols = cols.filter(c => c !== 'id');
+
+                // Update header
+                header.innerHTML = '<tr>' + displayCols.map(col => {
+                    const isNumeric = typeof results[0][col] === 'number';
+                    return `<th class="px-4 py-3 ${isNumeric ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${escapeHtml(col)}</th>`;
+                }).join('') + '</tr>';
+
+                // Update body
+                body.innerHTML = results.map(row => {
+                    const tickerCol = displayCols.includes('ticker') ? 'ticker' : null;
+                    return '<tr class="hover:bg-gray-50 cursor-pointer" data-id="' + row.id + '">' +
+                        displayCols.map(col => {
+                            let value = row[col];
+                            const isNumeric = typeof value === 'number';
+
+                            // Format market cap
+                            if (col.toLowerCase().includes('market_cap') && typeof value === 'number') {
+                                value = formatMarketCap(value);
+                            } else if (typeof value === 'number' && !Number.isInteger(value)) {
+                                value = value.toFixed(2);
+                            }
+
+                            // Make ticker a link
+                            if (col === 'ticker' && value) {
+                                return `<td class="px-4 py-3 text-sm"><a href="/companies/${escapeHtml(value)}/" class="text-blue-600 hover:text-blue-800 font-medium">${escapeHtml(value)}</a></td>`;
+                            }
+
+                            return `<td class="px-4 py-3 text-sm ${isNumeric ? 'text-right' : ''}">${value !== null && value !== undefined ? escapeHtml(value) : 'N/A'}</td>`;
+                        }).join('') +
+                    '</tr>';
+                }).join('');
+
+                // Add click handler for rows
+                body.querySelectorAll('tr[data-id]').forEach(row => {
+                    row.addEventListener('click', (e) => {
+                        if (e.target.tagName === 'A') return;
+                        const result = results.find(r => r.id == row.dataset.id);
+                        if (result && result.ticker) {
+                            window.location.href = '/companies/' + result.ticker + '/';
+                        }
+                    });
+                });
+            }
+
+            // Show error
+            function showError(message) {
+                const container = document.getElementById('error-container');
+                const messageEl = document.getElementById('error-message');
+                messageEl.textContent = message;
+                container.classList.remove('hidden');
+            }
+
+            // Hide error
+            function hideError() {
+                document.getElementById('error-container').classList.add('hidden');
+            }
+
+            // Show/hide SQL preview
+            function showSql(sql) {
+                const container = document.getElementById('sql-preview-container');
+                const preview = document.getElementById('sql-preview');
+                preview.textContent = sql;
+                container.classList.remove('hidden');
+                currentSql = sql;
+            }
+
+            function hideSql() {
+                document.getElementById('sql-preview-container').classList.add('hidden');
+                currentSql = '';
+            }
+
+            // SQL toggle
+            const sqlToggle = document.getElementById('sql-toggle');
+            const sqlContent = document.getElementById('sql-content');
+            const sqlToggleIcon = document.getElementById('sql-toggle-icon');
+            if (sqlToggle && sqlContent) {
+                sqlToggle.addEventListener('click', () => {
+                    sqlContent.classList.toggle('hidden');
+                    sqlToggleIcon.textContent = sqlContent.classList.contains('hidden') ? '+' : '-';
+                });
+            }
+
+            // Copy SQL
+            const copySqlBtn = document.getElementById('copy-sql-btn');
+            if (copySqlBtn) {
+                copySqlBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(currentSql).then(() => {
+                        copySqlBtn.textContent = 'Copied!';
+                        setTimeout(() => copySqlBtn.textContent = 'Copy SQL', 2000);
+                    });
+                });
+            }
+
+            // Apply basic filters
+            const applyFiltersBtn = document.getElementById('apply-filters-btn');
+            if (applyFiltersBtn) {
+                applyFiltersBtn.addEventListener('click', async () => {
+                    hideError();
+                    hideSql();
+
+                    const filters = {
+                        countries: getSelectedValues('country-option'),
+                        exchanges: getSelectedValues('exchange-option'),
+                        sectors: getSelectedValues('sector-option'),
+                        market_cap_min: document.getElementById('market-cap-min').value || null,
+                        market_cap_max: document.getElementById('market-cap-max').value || null,
+                    };
+
+                    currentFilters = filters;
+                    currentNlQuery = '';
+
+                    try {
+                        const response = await fetch('/api/screener/run/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({ basic_filters: filters })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            showError(data.error || 'Failed to run query');
+                            return;
+                        }
+
+                        currentResults = data.results;
+                        renderResults(data.results);
+                    } catch (e) {
+                        console.error(e);
+                        showError('Failed to run query');
+                    }
+                });
+            }
+
+            // Run NL query
+            const nlQueryInput = document.getElementById('nl-query');
+            const runNlBtn = document.getElementById('run-nl-query-btn');
+            const nlLoading = document.getElementById('nl-loading');
+
+            if (runNlBtn && nlQueryInput) {
+                runNlBtn.addEventListener('click', async () => {
+                    const query = nlQueryInput.value.trim();
+                    if (!query) {
+                        showError('Please enter a query');
+                        return;
+                    }
+
+                    hideError();
+                    hideSql();
+                    runNlBtn.disabled = true;
+                    nlLoading.classList.remove('hidden');
+
+                    currentNlQuery = query;
+                    currentFilters = {};
+
+                    try {
+                        const response = await fetch('/api/screener/run/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({ nl_query: query })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            showError(data.error || 'Failed to run query');
+                            if (data.generated_sql) {
+                                showSql(data.generated_sql);
+                            }
+                            return;
+                        }
+
+                        currentResults = data.results;
+                        if (data.generated_sql) {
+                            showSql(data.generated_sql);
+                        }
+                        renderResults(data.results);
+                    } catch (e) {
+                        console.error(e);
+                        showError('Failed to run query');
+                    } finally {
+                        runNlBtn.disabled = false;
+                        nlLoading.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Save screen functionality
+            const saveScreenBtn = document.getElementById('save-screen-btn');
+            const saveModal = document.getElementById('save-modal');
+            const screenNameInput = document.getElementById('screen-name-input');
+            const cancelSaveBtn = document.getElementById('cancel-save-btn');
+            const confirmSaveBtn = document.getElementById('confirm-save-btn');
+
+            if (saveScreenBtn && saveModal) {
+                saveScreenBtn.addEventListener('click', () => {
+                    saveModal.classList.remove('hidden');
+                    saveModal.classList.add('flex');
+                    screenNameInput.value = '';
+                    screenNameInput.focus();
+                });
+
+                cancelSaveBtn.addEventListener('click', () => {
+                    saveModal.classList.add('hidden');
+                    saveModal.classList.remove('flex');
+                });
+
+                confirmSaveBtn.addEventListener('click', async () => {
+                    const name = screenNameInput.value.trim();
+                    if (!name) {
+                        alert('Please enter a name');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/screener/save/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({
+                                name: name,
+                                basic_filters: currentFilters,
+                                nl_query: currentNlQuery,
+                                generated_sql: currentSql
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            alert(data.error || 'Failed to save screen');
+                            return;
+                        }
+
+                        // Add to list
+                        const list = document.getElementById('saved-screens-list');
+                        const noMsg = document.getElementById('no-screens-msg');
+                        if (noMsg) noMsg.remove();
+
+                        const item = document.createElement('div');
+                        item.className = 'saved-screen-item flex items-center justify-between p-2 border border-gray-100 rounded-md hover:bg-gray-50';
+                        item.dataset.id = data.id;
+                        item.innerHTML = `
+                            <button type="button" class="load-screen-btn text-sm text-gray-900 hover:text-blue-600 text-left flex-1">${escapeHtml(name)}</button>
+                            <button type="button" class="delete-screen-btn text-xs text-red-500 hover:text-red-700 ml-2">Delete</button>
+                        `;
+                        list.prepend(item);
+
+                        saveModal.classList.add('hidden');
+                        saveModal.classList.remove('flex');
+                    } catch (e) {
+                        console.error(e);
+                        alert('Failed to save screen');
+                    }
+                });
+            }
+
+            // Load and delete saved screens
+            const savedScreensList = document.getElementById('saved-screens-list');
+            if (savedScreensList) {
+                savedScreensList.addEventListener('click', async (e) => {
+                    const loadBtn = e.target.closest('.load-screen-btn');
+                    const deleteBtn = e.target.closest('.delete-screen-btn');
+                    const item = e.target.closest('.saved-screen-item');
+
+                    if (!item) return;
+                    const screenId = item.dataset.id;
+
+                    if (deleteBtn) {
+                        if (!confirm('Delete this saved screen?')) return;
+
+                        try {
+                            const response = await fetch(`/api/screener/saved/${screenId}/delete/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': '{{ csrf_token }}'
+                                }
+                            });
+
+                            if (response.ok) {
+                                item.remove();
+                                if (savedScreensList.children.length === 0) {
+                                    savedScreensList.innerHTML = '<p class="text-sm text-gray-500" id="no-screens-msg">No saved screens yet.</p>';
+                                }
+                            } else {
+                                alert('Failed to delete screen');
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            alert('Failed to delete screen');
+                        }
+                        return;
+                    }
+
+                    if (loadBtn) {
+                        try {
+                            const response = await fetch('/api/screener/saved/');
+                            const data = await response.json();
+
+                            if (!response.ok) {
+                                alert('Failed to load screens');
+                                return;
+                            }
+
+                            const screen = data.screens.find(s => s.id == screenId);
+                            if (!screen) {
+                                alert('Screen not found');
+                                return;
+                            }
+
+                            // Restore filters
+                            currentFilters = screen.basic_filters || {};
+                            currentNlQuery = screen.nl_query || '';
+                            currentSql = screen.generated_sql || '';
+
+                            // Update UI
+                            if (currentNlQuery) {
+                                nlQueryInput.value = currentNlQuery;
+                            }
+
+                            // Set filter checkboxes
+                            document.querySelectorAll('.country-option').forEach(el => {
+                                el.checked = (currentFilters.countries || []).includes(el.value);
+                            });
+                            document.querySelectorAll('.exchange-option').forEach(el => {
+                                el.checked = (currentFilters.exchanges || []).includes(el.value);
+                            });
+                            document.querySelectorAll('.sector-option').forEach(el => {
+                                el.checked = (currentFilters.sectors || []).includes(el.value);
+                            });
+
+                            // Trigger change events to update labels
+                            document.getElementById('country-dropdown').dispatchEvent(new Event('change'));
+                            document.getElementById('exchange-dropdown').dispatchEvent(new Event('change'));
+                            document.getElementById('sector-dropdown').dispatchEvent(new Event('change'));
+
+                            document.getElementById('market-cap-min').value = currentFilters.market_cap_min || '';
+                            document.getElementById('market-cap-max').value = currentFilters.market_cap_max || '';
+
+                            // Run the query
+                            hideError();
+                            if (currentNlQuery) {
+                                runNlBtn.click();
+                            } else {
+                                applyFiltersBtn.click();
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            alert('Failed to load screen');
+                        }
+                    }
+                });
+            }
+
+            // Header search
+            const headerSearch = document.getElementById('header-search');
+            const headerResults = document.getElementById('header-results');
+            if (headerSearch && headerResults) {
+                headerSearch.addEventListener('input', async () => {
+                    const q = headerSearch.value.trim();
+                    if (q.length < 1) { headerResults.classList.add('hidden'); return; }
+
+                    const res = await fetch('/api/search/?q=' + encodeURIComponent(q));
+                    const data = await res.json();
+
+                    if (data.length === 0) { headerResults.classList.add('hidden'); return; }
+
+                    headerResults.innerHTML = data.map(c =>
+                        `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                            <span class="font-medium text-gray-900">${c.ticker}</span>
+                            <span class="text-gray-500">${c.name}</span>
+                        </a></li>`
+                    ).join('');
+                    headerResults.classList.remove('hidden');
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

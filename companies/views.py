@@ -12,8 +12,8 @@ import yfinance as yf
 import requests
 
 import os
-from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken
-from companies.utils import send_verification_email
+from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen
+from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql
 from django.db.models import Q
 from django.utils import timezone
 from django.db.models import Count, Q as DQ
@@ -915,4 +915,163 @@ def verify_email(request):
             error = "No pending verification. Please sign up again."
 
     return render(request, 'registration/verify_code.html', {'email': email, 'error': error})
+
+
+def screener_home(request):
+    """Render the screener page with filter options."""
+    exchanges = list(Company.objects.exclude(exchange="").values_list("exchange", flat=True).distinct().order_by("exchange"))
+    countries = list(Company.objects.exclude(country="").values_list("country", flat=True).distinct().order_by("country"))
+    sectors = list(Company.objects.exclude(sector="").values_list("sector", flat=True).distinct().order_by("sector"))
+
+    saved_screens = []
+    if request.user.is_authenticated:
+        saved_screens = list(SavedScreen.objects.filter(user=request.user).values("id", "name", "updated_at"))
+
+    return render(request, 'companies/screener.html', {
+        "exchanges": exchanges,
+        "countries": countries,
+        "sectors": sectors,
+        "saved_screens": saved_screens,
+    })
+
+
+@require_POST
+def screener_run(request):
+    """Execute a screener query with basic filters and/or natural language."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    basic_filters = data.get("basic_filters", {})
+    nl_query = (data.get("nl_query") or "").strip()
+
+    # If there's a natural language query, use OpenAI to generate SQL
+    if nl_query:
+        sql, error = generate_screener_sql(nl_query)
+        if error:
+            return JsonResponse({"error": error}, status=400)
+
+        results, exec_error = execute_screener_query(sql)
+        if exec_error:
+            return JsonResponse({"error": exec_error, "generated_sql": sql}, status=400)
+
+        return JsonResponse({
+            "results": results,
+            "generated_sql": sql,
+            "count": len(results),
+        })
+
+    # Otherwise, use basic filters with Django ORM
+    qs = Company.objects.all()
+
+    countries = basic_filters.get("countries", [])
+    if countries:
+        qs = qs.filter(country__in=countries)
+
+    exchanges = basic_filters.get("exchanges", [])
+    if exchanges:
+        qs = qs.filter(exchange__in=exchanges)
+
+    sectors = basic_filters.get("sectors", [])
+    if sectors:
+        qs = qs.filter(sector__in=sectors)
+
+    market_cap_min = basic_filters.get("market_cap_min")
+    if market_cap_min:
+        try:
+            qs = qs.filter(market_cap__gte=int(market_cap_min))
+        except (ValueError, TypeError):
+            pass
+
+    market_cap_max = basic_filters.get("market_cap_max")
+    if market_cap_max:
+        try:
+            qs = qs.filter(market_cap__lte=int(market_cap_max))
+        except (ValueError, TypeError):
+            pass
+
+    qs = qs.order_by("ticker")[:100]
+
+    results = [
+        {
+            "id": c.id,
+            "ticker": c.ticker,
+            "name": c.name,
+            "exchange": c.exchange,
+            "sector": c.sector,
+            "country": c.country,
+            "market_cap": c.market_cap,
+        }
+        for c in qs
+    ]
+
+    return JsonResponse({
+        "results": results,
+        "generated_sql": "",
+        "count": len(results),
+    })
+
+
+@login_required
+@require_POST
+def screener_save(request):
+    """Save a screener configuration."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"error": "Name is required"}, status=400)
+
+    basic_filters = data.get("basic_filters", {})
+    nl_query = (data.get("nl_query") or "").strip()
+    generated_sql = (data.get("generated_sql") or "").strip()
+
+    screen = SavedScreen.objects.create(
+        user=request.user,
+        name=name,
+        basic_filters=basic_filters,
+        nl_query=nl_query,
+        generated_sql=generated_sql,
+    )
+
+    return JsonResponse({
+        "id": screen.id,
+        "name": screen.name,
+        "created_at": screen.created_at.strftime("%d/%m/%Y, %I:%M %p"),
+    })
+
+
+@login_required
+def screener_saved_list(request):
+    """List saved screens for the current user."""
+    screens = SavedScreen.objects.filter(user=request.user)
+    return JsonResponse({
+        "screens": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "basic_filters": s.basic_filters,
+                "nl_query": s.nl_query,
+                "generated_sql": s.generated_sql,
+                "updated_at": s.updated_at.strftime("%d/%m/%Y, %I:%M %p"),
+            }
+            for s in screens
+        ]
+    })
+
+
+@login_required
+@require_POST
+def screener_saved_delete(request, screen_id):
+    """Delete a saved screen."""
+    try:
+        screen = SavedScreen.objects.get(id=screen_id, user=request.user)
+        screen.delete()
+        return JsonResponse({"success": True})
+    except SavedScreen.DoesNotExist:
+        return JsonResponse({"error": "Screen not found"}, status=404)
 

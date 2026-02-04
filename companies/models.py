@@ -15,6 +15,9 @@ class Company(models.Model):
     FYE_month = models.PositiveSmallIntegerField(null=True, blank=True)
     sector = models.CharField(max_length=100, blank=True, default="")
     industry = models.CharField(max_length=100, blank=True, default="")
+    country = models.CharField(max_length=100, blank=True, default="")
+    market_cap = models.BigIntegerField(null=True, blank=True)
+    shares_outstanding = models.BigIntegerField(null=True, blank=True)
 
     description = models.TextField(blank=True, default="")
     special_sits = models.TextField(blank=True, default="")
@@ -319,3 +322,20 @@ class ChatMessage(models.Model):
 
     def __str__(self) -> str:
         return f"{self.session_id} {self.role}"
+
+
+class SavedScreen(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_screens")
+    name = models.CharField(max_length=255)
+    basic_filters = models.JSONField(default=dict)
+    nl_query = models.TextField(blank=True, default="")
+    generated_sql = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "-updated_at"])]
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username}: {self.name}"

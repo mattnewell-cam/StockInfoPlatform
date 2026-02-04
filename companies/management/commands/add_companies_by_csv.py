@@ -23,8 +23,11 @@ class Command(BaseCommand):
                 name = info["longName"].replace("Public Limited Company", "plc")
                 exchange = info["exchange"]
                 currency = info["currency"]
-                sector = info["sectorDisp"]
-                industry = info["industryDisp"]
+                sector = info.get("sectorDisp", "")
+                industry = info.get("industryDisp", "")
+                country = info.get("country", "")
+                market_cap = info.get("marketCap")
+                shares_outstanding = info.get("sharesOutstanding")
 
                 try:
                     ts = info["lastFiscalYearEnd"]
@@ -41,6 +44,9 @@ class Command(BaseCommand):
                     FYE_month=fye_month,
                     sector=sector,
                     industry=industry,
+                    country=country,
+                    market_cap=market_cap,
+                    shares_outstanding=shares_outstanding,
                 )
 
                 print(f"Added {name} ({t})")
