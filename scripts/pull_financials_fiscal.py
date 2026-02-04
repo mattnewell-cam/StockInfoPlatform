@@ -5,6 +5,8 @@ import os
 import sys
 import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -13,7 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 URL = "https://fiscal.ai"
 FAST_MODE_DEFAULT = True
-K_UNITS_SET = False
+WORKERS_DEFAULT = 4
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
@@ -96,29 +98,53 @@ def build_fiscal_ticker(ticker, exchange):
     return f"{exchange}-{ticker}"
 
 
-def navigate_to_login(driver):
-    """Navigate to the fiscal.ai login page and enter email."""
+def start_login_flow(driver):
+    """Navigate to fiscal.ai, enter email, and return magic link."""
     driver.get(URL)
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
     print(f"Loaded {URL}")
     time.sleep(1)  # Let page fully render
 
-    # Click the login button
-    try:
+    def click_login():
         login_btn = driver.find_element(By.ID, "ph-marketing-header__sign-up-button")
         print(f"Found login button: {login_btn.text}")
         driver.execute_script("arguments[0].scrollIntoView(true);", login_btn)
         time.sleep(0.5)
         driver.execute_script("arguments[0].click();", login_btn)
         print("Clicked login button via JS")
+
+    # Click the login button
+    try:
+        click_login()
     except Exception as e:
         print(f"Could not click login button: {e}")
         print("Page source snippet:")
         print(driver.page_source[:2000])
         raise
 
-    # Enter email
-    email_input = wait_for(driver, By.CSS_SELECTOR, "input[placeholder='your@email.com']", timeout=10)
+    # Enter email (retry once if the modal doesn't appear)
+    email_selectors = [
+        "input[placeholder='your@email.com']",
+        "input[type='email']",
+        "input[name='email']",
+        "input[placeholder*='@']",
+    ]
+    email_input = None
+    for _ in range(2):
+        try:
+            email_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ",".join(email_selectors)))
+            )
+            break
+        except Exception:
+            driver.refresh()
+            wait_for(driver, By.TAG_NAME, "body", timeout=15)
+            time.sleep(1)
+            click_login()
+
+    if email_input is None:
+        raise RuntimeError("Email input not found after clicking login.")
+
     email_input.clear()
     email_input.send_keys("matthew_newell@outlook.com")
     print("Entered email")
@@ -137,12 +163,16 @@ def navigate_to_login(driver):
     time.sleep(0.5)
     print("\nCheck your email for the sign-in link.")
     magic_link = input("Paste the sign-in link here: ").strip()
+    return magic_link
 
-    if magic_link:
-        driver.get(magic_link)
-        wait_for(driver, By.TAG_NAME, "body", timeout=15)
-        print(f"Navigated to magic link. Current URL: {driver.current_url}")
-        time.sleep(1)
+
+def open_magic_link(driver, magic_link):
+    if not magic_link:
+        raise RuntimeError("Magic link missing.")
+    driver.get(magic_link)
+    wait_for(driver, By.TAG_NAME, "body", timeout=15)
+    print(f"Navigated to magic link. Current URL: {driver.current_url}")
+    time.sleep(1)
 
 
 def wait_for_table(driver, timeout=20):
@@ -206,12 +236,12 @@ def load_statement_table(driver, ticker, slug, expand_slider=True, fast_mode=Fal
 
 
 def ensure_k_units(driver, timeout=10):
-    global K_UNITS_SET
-    if K_UNITS_SET:
+    if getattr(driver, "_k_units_attempted", False):
         return
+    driver._k_units_attempted = True
     try:
         label = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable(
+            EC.presence_of_element_located(
                 (
                     By.XPATH,
                     "//label[.//span[contains(@class,'mantine-SegmentedControl-innerLabel')"
@@ -219,9 +249,12 @@ def ensure_k_units(driver, timeout=10):
                 )
             )
         )
-        safe_click(driver, label)
+        driver.execute_script("arguments[0].scrollIntoView(true);", label)
+        time.sleep(0.1)
+        if label.get_attribute("data-active") != "true":
+            safe_click(driver, label)
         time.sleep(0.2)
-        K_UNITS_SET = True
+        driver._k_units_set = True
         print("Set financial units to K")
     except Exception as exc:
         print(f"Failed to set financial units to K: {exc}")
@@ -261,29 +294,36 @@ STATEMENT_SLUGS = {
 
 
 def pull_financials(driver, ticker, exchange="LSE", expand_slider=True, fast_mode=False):
-    fiscal_ticker = build_fiscal_ticker(ticker, exchange)
-    rows_by_statement = {}
+    def run_for_exchange(exch):
+        fiscal_ticker = build_fiscal_ticker(ticker, exch)
+        rows_by_statement = {}
+        for statement, slugs in STATEMENT_SLUGS.items():
+            last_exc = None
+            for slug in slugs:
+                try:
+                    rows = load_statement_table(
+                        driver,
+                        fiscal_ticker,
+                        slug,
+                        expand_slider=expand_slider,
+                        fast_mode=fast_mode,
+                    )
+                    rows_by_statement[statement] = rows
+                    last_exc = None
+                    break
+                except Exception as exc:
+                    last_exc = exc
+            if last_exc:
+                raise last_exc
+        return rows_by_statement
 
-    for statement, slugs in STATEMENT_SLUGS.items():
-        last_exc = None
-        for slug in slugs:
-            try:
-                rows = load_statement_table(
-                    driver,
-                    fiscal_ticker,
-                    slug,
-                    expand_slider=expand_slider,
-                    fast_mode=fast_mode,
-                )
-                rows_by_statement[statement] = rows
-                last_exc = None
-                break
-            except Exception as exc:
-                last_exc = exc
-        if last_exc:
-            raise last_exc
-
-    return rows_by_statement
+    try:
+        return run_for_exchange(exchange)
+    except Exception as exc:
+        if exchange != "AIM" and "not found" in str(exc).lower():
+            print(f"{ticker} not found on {exchange}. Retrying with AIM.")
+            return run_for_exchange("AIM")
+        raise
 
 
 def load_cached_json(path):
@@ -376,18 +416,65 @@ def main():
     )
     args = parser.parse_args()
 
-    options = uc.ChromeOptions()
-    if args.headless:
-        options.add_argument("--headless")
+    def build_driver():
+        options = uc.ChromeOptions()
+        if args.headless:
+            options.add_argument("--headless")
+        d = uc.Chrome(options=options, version_main=144)
+        d.implicitly_wait(10)
+        return d
 
-    driver = uc.Chrome(options=options)
-    driver.implicitly_wait(10)
+    def split_chunks(items, workers):
+        if workers <= 1:
+            return [items]
+        chunks = [[] for _ in range(workers)]
+        for idx, item in enumerate(items):
+            chunks[idx % workers].append(item)
+        return [c for c in chunks if c]
 
+    def worker_run(worker_id, driver, tickers, cached, failed_existing, lock):
+        failed = []
+        fast_mode = args.fast and not args.no_fast
+        for t in tickers:
+            if not t:
+                continue
+            with lock:
+                if SKIP_IF_FAILED and t in failed_existing:
+                    print(f"[{worker_id}] {t} is in failed list. Skipping.")
+                    continue
+                if SKIP_IF_CACHED and t in cached:
+                    print(f"[{worker_id}] {t} already cached. Skipping.")
+                    continue
+                if args.no_overwrite and t in cached:
+                    print(f"[{worker_id}] {t} already cached. Skipping.")
+                    continue
+            try:
+                financials = pull_financials(
+                    driver,
+                    t,
+                    exchange=args.exchange,
+                    expand_slider=not args.no_slider,
+                    fast_mode=fast_mode,
+                )
+                with lock:
+                    cached[t] = financials
+                    save_cached_json(args.out_json, cached)
+                print(f"[{worker_id}] Saved cached financials for {t}")
+            except Exception as e:
+                print(f"[{worker_id}] Failed {t}: {e}")
+                failed.append(t)
+                with lock:
+                    failed_existing.add(t)
+                    try:
+                        with open(args.failed_csv, "a", newline="") as f:
+                            writer = csv.writer(f)
+                            writer.writerow([t])
+                    except Exception as write_exc:
+                        print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
+        return failed
+
+    drivers = []
     try:
-        navigate_to_login(driver)
-        print("Successfully logged in.")
-        print(f"Current URL: {driver.current_url}")
-
         use_csv = args.use_csv or not USE_TEST_TICKER
         if use_csv:
             with open(args.tickers_csv, newline="") as f:
@@ -400,41 +487,35 @@ def main():
         cached = load_cached_json(args.out_json)
         failed_existing = load_failed_set(args.failed_csv)
 
+        workers = WORKERS_DEFAULT
+        chunks = split_chunks(tickers, workers)
+        if not chunks:
+            print("No tickers to process.")
+            return
+        primary_driver = build_driver()
+        drivers.append(primary_driver)
+        magic_link = start_login_flow(primary_driver)
+
+        for _ in range(len(chunks) - 1):
+            d = build_driver()
+            drivers.append(d)
+
+        for idx, d in enumerate(drivers, start=1):
+            open_magic_link(d, magic_link)
+            print(f"Successfully logged in (window {idx}/{len(drivers)}).")
+            print(f"Current URL: {d.current_url}")
+
+        lock = Lock()
         failed = []
-        for t in tickers:
-            if not t:
-                continue
-            if SKIP_IF_FAILED and t in failed_existing:
-                print(f"{t} is in failed list. Skipping.")
-                continue
-            if SKIP_IF_CACHED and t in cached:
-                print(f"{t} already cached. Skipping.")
-                continue
-            if args.no_overwrite and t in cached:
-                print(f"{t} already cached. Skipping.")
-                continue
-            try:
-                fast_mode = args.fast and not args.no_fast
-                financials = pull_financials(
-                    driver,
-                    t,
-                    exchange=args.exchange,
-                    expand_slider=not args.no_slider,
-                    fast_mode=fast_mode,
-                )
-                cached[t] = financials
-                save_cached_json(args.out_json, cached)
-                print(f"Saved cached financials for {t}")
-            except Exception as e:
-                print(f"Failed {t}: {e}")
-                failed.append(t)
-                failed_existing.add(t)
+        with ThreadPoolExecutor(max_workers=len(chunks)) as executor:
+            futures = []
+            for idx, (d, chunk) in enumerate(zip(drivers, chunks), start=1):
+                futures.append(executor.submit(worker_run, idx, d, chunk, cached, failed_existing, lock))
+            for fut in as_completed(futures):
                 try:
-                    with open(args.failed_csv, "a", newline="") as f:
-                        writer = csv.writer(f)
-                        writer.writerow([t])
-                except Exception as write_exc:
-                    print(f"Failed to write {t} to {args.failed_csv}: {write_exc}")
+                    failed.extend(fut.result())
+                except Exception as e:
+                    print(f"Worker error: {e}")
 
         if failed:
             print(f"Appended {len(failed)} failures to {args.failed_csv}")
@@ -443,7 +524,11 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        driver.quit()
+        for d in drivers:
+            try:
+                d.quit()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
