@@ -121,8 +121,11 @@
                         </div>
                     </div>
 
-                    <button id="apply-filters-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">
-                        Apply Filters
+                    <button id="apply-filters-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 mb-2">
+                        Run Screen
+                    </button>
+                    <button id="clear-all-btn" class="w-full text-xs text-gray-500 hover:text-gray-700">
+                        Clear All Filters
                     </button>
                 </div>
 
@@ -424,103 +427,130 @@
                 });
             }
 
-            // Apply basic filters
+            // Get current basic filters from UI
+            function getBasicFilters() {
+                return {
+                    countries: getSelectedValues('country-option'),
+                    exchanges: getSelectedValues('exchange-option'),
+                    sectors: getSelectedValues('sector-option'),
+                    market_cap_min: document.getElementById('market-cap-min').value || null,
+                    market_cap_max: document.getElementById('market-cap-max').value || null,
+                };
+            }
+
+            // Unified screener run function
+            async function runScreener(options = {}) {
+                const nlQueryInput = document.getElementById('nl-query');
+                const runNlBtn = document.getElementById('run-nl-query-btn');
+                const nlLoading = document.getElementById('nl-loading');
+
+                hideError();
+
+                const filters = getBasicFilters();
+                const nlQuery = nlQueryInput ? nlQueryInput.value.trim() : '';
+
+                currentFilters = filters;
+                currentNlQuery = nlQuery;
+
+                // Only hide SQL if not running NL query
+                if (!nlQuery) {
+                    hideSql();
+                }
+
+                // Show loading state for NL queries
+                if (nlQuery && runNlBtn) {
+                    runNlBtn.disabled = true;
+                    nlLoading.classList.remove('hidden');
+                }
+
+                try {
+                    const payload = { basic_filters: filters };
+                    if (nlQuery) {
+                        payload.nl_query = nlQuery;
+                    }
+
+                    const response = await fetch('/api/screener/run/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        showError(data.error || 'Failed to run query');
+                        if (data.generated_sql) {
+                            showSql(data.generated_sql);
+                        }
+                        return;
+                    }
+
+                    currentResults = data.results;
+                    if (data.generated_sql) {
+                        showSql(data.generated_sql);
+                    }
+                    renderResults(data.results);
+                } catch (e) {
+                    console.error(e);
+                    showError('Failed to run query');
+                } finally {
+                    if (runNlBtn) {
+                        runNlBtn.disabled = false;
+                        nlLoading.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Apply basic filters button
             const applyFiltersBtn = document.getElementById('apply-filters-btn');
             if (applyFiltersBtn) {
-                applyFiltersBtn.addEventListener('click', async () => {
-                    hideError();
-                    hideSql();
+                applyFiltersBtn.addEventListener('click', () => runScreener());
+            }
 
-                    const filters = {
-                        countries: getSelectedValues('country-option'),
-                        exchanges: getSelectedValues('exchange-option'),
-                        sectors: getSelectedValues('sector-option'),
-                        market_cap_min: document.getElementById('market-cap-min').value || null,
-                        market_cap_max: document.getElementById('market-cap-max').value || null,
-                    };
-
-                    currentFilters = filters;
+            // Clear all filters button
+            const clearAllBtn = document.getElementById('clear-all-btn');
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener('click', () => {
+                    // Clear all checkboxes
+                    document.querySelectorAll('.country-option, .exchange-option, .sector-option').forEach(el => {
+                        el.checked = false;
+                    });
+                    // Update labels
+                    document.getElementById('country-label').textContent = 'All countries';
+                    document.getElementById('exchange-label').textContent = 'All exchanges';
+                    document.getElementById('sector-label').textContent = 'All sectors';
+                    // Clear market cap inputs
+                    document.getElementById('market-cap-min').value = '';
+                    document.getElementById('market-cap-max').value = '';
+                    // Clear NL query
+                    const nlInput = document.getElementById('nl-query');
+                    if (nlInput) nlInput.value = '';
+                    // Clear state
+                    currentFilters = {};
                     currentNlQuery = '';
-
-                    try {
-                        const response = await fetch('/api/screener/run/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': '{{ csrf_token }}'
-                            },
-                            body: JSON.stringify({ basic_filters: filters })
-                        });
-
-                        const data = await response.json();
-
-                        if (!response.ok) {
-                            showError(data.error || 'Failed to run query');
-                            return;
-                        }
-
-                        currentResults = data.results;
-                        renderResults(data.results);
-                    } catch (e) {
-                        console.error(e);
-                        showError('Failed to run query');
-                    }
+                    currentSql = '';
+                    // Hide SQL preview
+                    hideSql();
+                    hideError();
                 });
             }
 
-            // Run NL query
+            // Run NL query button
             const nlQueryInput = document.getElementById('nl-query');
             const runNlBtn = document.getElementById('run-nl-query-btn');
             const nlLoading = document.getElementById('nl-loading');
 
             if (runNlBtn && nlQueryInput) {
-                runNlBtn.addEventListener('click', async () => {
+                runNlBtn.addEventListener('click', () => {
                     const query = nlQueryInput.value.trim();
                     if (!query) {
                         showError('Please enter a query');
                         return;
                     }
-
-                    hideError();
-                    hideSql();
-                    runNlBtn.disabled = true;
-                    nlLoading.classList.remove('hidden');
-
-                    currentNlQuery = query;
-                    currentFilters = {};
-
-                    try {
-                        const response = await fetch('/api/screener/run/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': '{{ csrf_token }}'
-                            },
-                            body: JSON.stringify({ nl_query: query })
-                        });
-
-                        const data = await response.json();
-
-                        if (!response.ok) {
-                            showError(data.error || 'Failed to run query');
-                            if (data.generated_sql) {
-                                showSql(data.generated_sql);
-                            }
-                            return;
-                        }
-
-                        currentResults = data.results;
-                        if (data.generated_sql) {
-                            showSql(data.generated_sql);
-                        }
-                        renderResults(data.results);
-                    } catch (e) {
-                        console.error(e);
-                        showError('Failed to run query');
-                    } finally {
-                        runNlBtn.disabled = false;
-                        nlLoading.classList.add('hidden');
-                    }
+                    runScreener();
                 });
             }
 
@@ -655,10 +685,8 @@
                             currentNlQuery = screen.nl_query || '';
                             currentSql = screen.generated_sql || '';
 
-                            // Update UI
-                            if (currentNlQuery) {
-                                nlQueryInput.value = currentNlQuery;
-                            }
+                            // Update UI - always set NL query (even if empty, to clear previous)
+                            nlQueryInput.value = currentNlQuery;
 
                             // Set filter checkboxes
                             document.querySelectorAll('.country-option').forEach(el => {

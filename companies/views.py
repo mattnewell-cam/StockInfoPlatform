@@ -262,21 +262,46 @@ SUM_METRICS = [
     "Cash From Financing",
 ]
 
-def pivot_items(items, metrics):
-    # items: [(metric, date, value), ...]
+def pivot_items(items, metrics=None):
+    """
+    Pivot financial items into a table format.
+    items: [(metric, date, value), ...]
+    metrics: list of metrics to show in order, or None to show all available
+    """
+    if not items:
+        return {"dates": [], "rows": []}
+
     dates = sorted({d for _, d, _ in items}, reverse=True)
     lookup = {(m, d): v for m, d, v in items}
+
+    # If no metrics specified, use all unique metrics from the data
+    if metrics is None:
+        metrics = []
+        seen = set()
+        for m, _, _ in items:
+            if m not in seen:
+                metrics.append(m)
+                seen.add(m)
+
     rows = []
     for m in metrics:
-        rows.append({
-            "metric": m,
-            "values": [lookup.get((m, d)) for d in dates],
-            "sum_metric": m in SUM_METRICS
-        })
-    dates = [d.strftime("%b %Y") for d in dates]
+        # Only include metrics that have at least one value
+        values = [lookup.get((m, d)) for d in dates]
+        if any(v is not None for v in values):
+            rows.append({
+                "metric": m,
+                "values": values,
+                "sum_metric": m in SUM_METRICS
+            })
 
-    print(dates)
+    dates = [d.strftime("%b %Y") for d in dates]
     return {"dates": dates, "rows": rows}
+
+
+def is_qfs_data(items):
+    """Check if the financial data is from QuickFS (has 'Revenue' metric)."""
+    metrics = {m for m, _, _ in items}
+    return "Revenue" in metrics
 
 
 class CompanyDetailView(DetailView):
@@ -297,9 +322,18 @@ class CompanyDetailView(DetailView):
         for st, m, d, v in items:
             buckets[st].append((m, d, v))
 
-        ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
-        ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
-        ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
+        # Check if this is QFS data (has "Revenue") or Fiscal data
+        all_items = buckets["IS"] + buckets["BS"] + buckets["CF"]
+        if is_qfs_data(all_items):
+            # Use predefined QFS metric order
+            ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
+            ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
+            ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
+        else:
+            # Show all available metrics for Fiscal data
+            ctx["IS_table"] = pivot_items(buckets["IS"])
+            ctx["BS_table"] = pivot_items(buckets["BS"])
+            ctx["CF_table"] = pivot_items(buckets["CF"])
 
         # Price data for chart
         prices = StockPrice.objects.filter(company=self.object).order_by('date')
@@ -935,6 +969,44 @@ def screener_home(request):
     })
 
 
+def _apply_basic_filters(results, basic_filters):
+    """Apply basic filters to a list of result dicts."""
+    if not basic_filters:
+        return results
+
+    filtered = results
+
+    countries = basic_filters.get("countries", [])
+    if countries:
+        filtered = [r for r in filtered if r.get("country") in countries]
+
+    exchanges = basic_filters.get("exchanges", [])
+    if exchanges:
+        filtered = [r for r in filtered if r.get("exchange") in exchanges]
+
+    sectors = basic_filters.get("sectors", [])
+    if sectors:
+        filtered = [r for r in filtered if r.get("sector") in sectors]
+
+    market_cap_min = basic_filters.get("market_cap_min")
+    if market_cap_min:
+        try:
+            min_val = int(market_cap_min)
+            filtered = [r for r in filtered if r.get("market_cap") and r.get("market_cap") >= min_val]
+        except (ValueError, TypeError):
+            pass
+
+    market_cap_max = basic_filters.get("market_cap_max")
+    if market_cap_max:
+        try:
+            max_val = int(market_cap_max)
+            filtered = [r for r in filtered if r.get("market_cap") and r.get("market_cap") <= max_val]
+        except (ValueError, TypeError):
+            pass
+
+    return filtered
+
+
 @require_POST
 def screener_run(request):
     """Execute a screener query with basic filters and/or natural language."""
@@ -955,6 +1027,22 @@ def screener_run(request):
         results, exec_error = execute_screener_query(sql)
         if exec_error:
             return JsonResponse({"error": exec_error, "generated_sql": sql}, status=400)
+
+        # Enrich results with company data for filtering
+        company_ids = [r.get("id") for r in results if r.get("id")]
+        companies_by_id = {
+            c.id: c for c in Company.objects.filter(id__in=company_ids)
+        }
+        for r in results:
+            company = companies_by_id.get(r.get("id"))
+            if company:
+                r.setdefault("country", company.country)
+                r.setdefault("exchange", company.exchange)
+                r.setdefault("sector", company.sector)
+                r.setdefault("market_cap", company.market_cap)
+
+        # Apply basic filters to NL query results
+        results = _apply_basic_filters(results, basic_filters)
 
         return JsonResponse({
             "results": results,
