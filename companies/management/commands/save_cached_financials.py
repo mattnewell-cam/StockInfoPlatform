@@ -8,8 +8,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--tickers-csv",
-            default="ftse_tickers.csv",
-            help="Path to CSV with tickers (default: ftse_tickers.csv)",
+            default="ftse_100_tickers.csv",
+            help="Path to CSV with tickers (default: ftse_100_tickers.csv)",
         )
         parser.add_argument(
             "--overwrite",

@@ -5,6 +5,10 @@ db.sqlite3
 tickers.csv
 ToDo.txt
 backup.json
+data.json
+db_export.json
 *.sql
-ftse_tickers.csv
+ftse_100_tickers.csv
+lse_all_tickers.csv
 model_comparison.txt
+chromedriver.exe

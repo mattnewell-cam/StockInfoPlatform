@@ -255,8 +255,8 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch QuickFS financials and save to the DB.")
     parser.add_argument(
         "--tickers-csv",
-        default=str((BASE_DIR / ".." / "ftse_tickers.csv").resolve()),
-        help="Path to CSV with tickers (default: ftse_tickers.csv in repo root)",
+        default=str((BASE_DIR / ".." / "ftse_100_tickers.csv").resolve()),
+        help="Path to CSV with tickers (default: ftse_100_tickers.csv in repo root)",
     )
     parser.add_argument(
         "--overwrite",

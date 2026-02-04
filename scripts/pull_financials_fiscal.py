@@ -12,6 +12,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 URL = "https://fiscal.ai"
+FAST_MODE_DEFAULT = True
+DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
+FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -251,8 +254,8 @@ def main():
     )
     parser.add_argument(
         "--tickers-csv",
-        default=str((BASE_DIR / ".." / "ftse_tickers.csv").resolve()),
-        help="Path to CSV with tickers (default: ftse_tickers.csv in repo root)",
+        default=str((BASE_DIR / ".." / "ftse_100_tickers.csv").resolve()),
+        help="Path to CSV with tickers (default: ftse_100_tickers.csv in repo root)",
     )
     parser.add_argument(
         "--use-csv",
@@ -266,8 +269,8 @@ def main():
     )
     parser.add_argument(
         "--out-json",
-        default=str((BASE_DIR / ".." / "cached_financials.json").resolve()),
-        help="Output JSON path (default: cached_financials.json in repo root)",
+        default=DEFAULT_OUT_JSON,
+        help="Output JSON path (default: cached_financials_2.json in repo root)",
     )
     parser.add_argument(
         "--overwrite",
@@ -280,6 +283,11 @@ def main():
         help="Skip tickers already present in cached_financials.json",
     )
     parser.add_argument(
+        "--failed-csv",
+        default=FAILED_CSV_DEFAULT,
+        help="Path for CSV list of tickers that failed",
+    )
+    parser.add_argument(
         "--no-slider",
         action="store_true",
         help="Skip adjusting the year range slider",
@@ -287,7 +295,13 @@ def main():
     parser.add_argument(
         "--fast",
         action="store_true",
+        default=FAST_MODE_DEFAULT,
         help="Reduce fixed sleeps and tighten waits (may be less stable)",
+    )
+    parser.add_argument(
+        "--no-fast",
+        action="store_true",
+        help="Disable fast mode for extra stability",
     )
     args = parser.parse_args()
 
@@ -313,6 +327,7 @@ def main():
 
         cached = load_cached_json(args.out_json)
 
+        failed = []
         for t in tickers:
             if not t:
                 continue
@@ -320,18 +335,27 @@ def main():
                 print(f"{t} already cached. Skipping.")
                 continue
             try:
+                fast_mode = args.fast and not args.no_fast
                 financials = pull_financials(
                     driver,
                     t,
                     exchange=args.exchange,
                     expand_slider=not args.no_slider,
-                    fast_mode=args.fast,
+                    fast_mode=fast_mode,
                 )
                 cached[t] = financials
                 save_cached_json(args.out_json, cached)
                 print(f"Saved cached financials for {t}")
             except Exception as e:
                 print(f"Failed {t}: {e}")
+                failed.append(t)
+
+        if failed:
+            with open(args.failed_csv, "w", newline="") as f:
+                writer = csv.writer(f)
+                for t in failed:
+                    writer.writerow([t])
+            print(f"Wrote failures to {args.failed_csv}")
 
         print("Done.")
     except Exception as e:
