@@ -13,6 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 URL = "https://fiscal.ai"
 FAST_MODE_DEFAULT = True
+K_UNITS_SET = False
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
@@ -20,7 +21,7 @@ FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
 USE_TEST_TICKER = False
 TEST_TICKER_DEFAULT = "LSE-SHEL"
-SKIP_IF_CACHED = True
+SKIP_IF_CACHED = False
 SKIP_IF_FAILED = True
 
 
@@ -179,6 +180,11 @@ def load_statement_table(driver, ticker, slug, expand_slider=True, fast_mode=Fal
     if not fast_mode:
         time.sleep(1)
 
+    if slug == "income-statement":
+        ensure_k_units(driver)
+
+    quick_missing_check(driver, ticker, timeout=3 if fast_mode else 5)
+
     if expand_slider:
         key_delay = 0.005 if fast_mode else 0.02
         set_slider_range(driver, min_val=5, max_val=22, key_delay=key_delay)
@@ -197,6 +203,54 @@ def load_statement_table(driver, ticker, slug, expand_slider=True, fast_mode=Fal
     if not rows or len(rows[0]) < 2:
         raise RuntimeError(f"{ticker} {slug} returned empty rows.")
     return rows
+
+
+def ensure_k_units(driver, timeout=10):
+    global K_UNITS_SET
+    if K_UNITS_SET:
+        return
+    try:
+        label = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//label[.//span[contains(@class,'mantine-SegmentedControl-innerLabel')"
+                    " and normalize-space()='K']]",
+                )
+            )
+        )
+        safe_click(driver, label)
+        time.sleep(0.2)
+        K_UNITS_SET = True
+        print("Set financial units to K")
+    except Exception as exc:
+        print(f"Failed to set financial units to K: {exc}")
+
+
+def quick_missing_check(driver, ticker, timeout=5):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]'):
+            return
+        if is_ticker_not_found(driver):
+            raise RuntimeError(f"{ticker} not found on fiscal.ai")
+        time.sleep(0.2)
+
+
+def is_ticker_not_found(driver):
+    try:
+        body = driver.find_element(By.TAG_NAME, "body").text.lower()
+    except Exception:
+        return False
+    markers = (
+        "not found",
+        "no results",
+        "no data",
+        "does not exist",
+        "can't find",
+        "cannot find",
+    )
+    return any(m in body for m in markers)
 
 
 STATEMENT_SLUGS = {
