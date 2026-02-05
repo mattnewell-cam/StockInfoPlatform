@@ -3,9 +3,10 @@ from companies.models import Company, Financial
 from companies.utils import end_of_month
 import json
 import re
-import yfinance as yf
-from datetime import datetime, timezone
-import time
+
+
+# Set to True to re-process companies that already exist in the database
+OVERWRITE = False
 
 
 # Month name to number mapping
@@ -139,6 +140,9 @@ class Command(BaseCommand):
             # Get or create company
             try:
                 company = Company.objects.get(ticker=ticker)
+                if not OVERWRITE:
+                    self.stdout.write(f"  Already exists, skipping")
+                    continue
             except Company.DoesNotExist:
                 if skip_create:
                     self.stdout.write(f"  Skipping {ticker} - not in database")
@@ -153,7 +157,6 @@ class Command(BaseCommand):
                     company = self._create_company(ticker)
                     created_companies += 1
                     self.stdout.write(self.style.SUCCESS(f"  Created company: {company.name}"))
-                    time.sleep(0.5)  # Rate limit yfinance
                 except Exception as e:
                     self.stderr.write(self.style.ERROR(f"  Failed to create company {ticker}: {e}"))
                     failed += 1
@@ -261,29 +264,12 @@ class Command(BaseCommand):
         ))
 
     def _create_company(self, ticker):
-        """Create a company from yfinance data."""
-        yf_ticker = yf.Ticker(f"{ticker}.L")
-        info = yf_ticker.get_info()
-
-        name = info.get("longName") or info.get("shortName") or ticker
-        name = name.replace("Public Limited Company", "plc")
-
-        try:
-            ts = info.get("lastFiscalYearEnd")
-            fye_month = datetime.fromtimestamp(ts, tz=timezone.utc).date().month if ts else 12
-        except Exception:
-            fye_month = 12
-
+        """Create a minimal company record (no yfinance needed)."""
         company = Company.objects.create(
-            name=name,
-            exchange=info.get("exchange", "LSE"),
+            name=ticker,  # Just use ticker as name for now
+            exchange="LSE",
             ticker=ticker,
-            currency=info.get("currency", "GBp"),
-            FYE_month=fye_month,
-            sector=info.get("sectorDisp") or info.get("sector") or "",
-            industry=info.get("industryDisp") or info.get("industry") or "",
-            country=info.get("country", ""),
-            market_cap=info.get("marketCap"),
-            shares_outstanding=info.get("sharesOutstanding"),
+            currency="GBp",
+            FYE_month=12,  # Default to December
         )
         return company

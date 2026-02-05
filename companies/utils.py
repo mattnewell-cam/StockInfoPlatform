@@ -142,40 +142,55 @@ Table: companies_financial (alias: f)
 - period_end_date: DATE - End date of the financial period
 - statement: VARCHAR(2) - "IS" (Income Statement), "BS" (Balance Sheet), or "CF" (Cash Flow)
 - metric: VARCHAR(100) - Name of the financial metric
-- value: DECIMAL - Value of the metric
+- value: DECIMAL - Value of the metric (in thousands of local currency)
 - currency: VARCHAR(3)
 
-Available metrics in companies_financial:
-Income Statement (IS): Revenue, Cost of Goods Sold, Gross Profit, Sales General & Administrative,
-  Other Operating Expense, Total Operating Expenses, Operating Profit, Net Interest Income,
-  Other Non-Operating Income, Pre-Tax Income, Income Tax, Other Non-recurring, Net Income,
-  Shares (Basic), Shares (Diluted)
-Balance Sheet (BS): Cash & Equivalents, Accounts Receivable, Inventories, Other Current Assets,
-  Total Current Assets, Property Plant & Equipment (Net), Goodwill, Other Intangible Assets,
-  Other Assets, Total Assets, Accounts Payable, Tax Payable, Short-Term Debt,
-  Current Portion of Capital Leases, Other Current Liabilities, Total Current Liabilities,
-  Long-Term Debt, Capital Leases, Pension Liabilities, Other Liabilities, Total Liabilities,
-  Retained Earnings, Paid-in Capital, Common Stock, Other, Shareholders Equity, Liabilities & Equity
-Cash Flow (CF): Net Income, Depreciation & Amortization, Change in Working Capital,
-  Change in Deferred Tax, Stock-Based Compensation, Other, Cash From Operations,
-  Property Plant & Equipment, Acquisitions, Intangibles, Cash From Investing,
-  Net Issuance of Common Stock, Net Issuance of Debt, Cash From Financing, Free Cash Flow
+Key Income Statement (IS) metrics:
+- 'Total Revenues' - Primary revenue metric (use this for revenue)
+- 'Gross Profit' - Revenue minus cost of goods sold (NULL for banks/insurance)
+- 'Operating Income' - Operating profit after operating expenses (for banks, use 'EBT, Excl. Unusual Items' instead)
+- 'EBT, Excl. Unusual Items' - Pre-tax earnings excluding one-offs (use as operating income proxy for banks)
+- 'Net Income' - Bottom line profit
+- 'EPS' or 'EPS Diluted' - Earnings per share
+- 'Cost of Goods Sold, Total' - Direct costs (NULL for banks/insurance)
+- 'Selling General & Admin Expenses, Total' - SG&A expenses
+- 'EBITDA' - Earnings before interest, taxes, depreciation, amortization
+- 'Gross Profit Margin' - Already calculated as percentage
+- 'Operating Margin' - Already calculated as percentage
+
+Key Balance Sheet (BS) metrics:
+- 'Total Assets'
+- 'Total Current Assets'
+- 'Cash And Equivalents'
+- 'Total Receivables' or 'Accounts Receivable, Total'
+- 'Inventory'
+- 'Net Property Plant And Equipment'
+- 'Goodwill'
+- 'Long-term Investments'
+
+Key Cash Flow (CF) metrics:
+- 'Net Income'
+- 'Cash from Operations' - Operating cash flow
+- 'Depreciation & Amortization' or 'Depreciation & Amortization, Total'
+- 'Stock-Based Compensation'
+- 'Free Cash Flow' (may not exist for all companies)
 
 Table: companies_stockprice (alias: sp)
 - id: INTEGER PRIMARY KEY
 - company_id: INTEGER FOREIGN KEY -> companies_company.id
 - date: DATE
-- open: DECIMAL
-- high: DECIMAL
-- low: DECIMAL
-- close: DECIMAL
+- open, high, low, close: DECIMAL
 - volume: BIGINT
 
+IMPORTANT NOTES:
+- Banks and insurance companies may not have 'Gross Profit' or 'Cost of Goods Sold, Total'
+- Use LEFT JOIN when querying metrics that may not exist for all companies
+- Use NULLIF to avoid division by zero
+
 Common calculations:
-- Operating Margin = Operating Profit / Revenue
-- Net Margin = Net Income / Revenue
-- Gross Margin = Gross Profit / Revenue
-- ROE = Net Income / Shareholders Equity
+- Operating Margin = Operating Income / Total Revenues (or use 'Operating Margin' metric directly)
+- Net Margin = Net Income / Total Revenues
+- Gross Margin = Gross Profit / Total Revenues (or use 'Gross Profit Margin' metric directly)
 - Revenue Growth = (Current Revenue - Prior Revenue) / Prior Revenue
 
 Rules:
@@ -184,7 +199,7 @@ Rules:
 3. Use table aliases: c for company, f for financial, sp for stockprice
 4. Use CTEs (WITH clause) for complex period comparisons
 5. Only use SELECT statements - no INSERT, UPDATE, DELETE, etc.
-6. IMPORTANT: This is SQLite - use CAST(value AS REAL) for division to avoid integer division (e.g., CAST(f1.value AS REAL) / f2.value)
+6. IMPORTANT: This is SQLite - use CAST(value AS REAL) for division to avoid integer division
 7. Return ONLY the SQL query, no explanation
 """
 
@@ -194,7 +209,7 @@ WITH revenue AS (
   SELECT company_id, period_end_date, value,
          ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY period_end_date DESC) as rn
   FROM companies_financial
-  WHERE metric = 'Revenue' AND statement = 'IS'
+  WHERE metric = 'Total Revenues' AND statement = 'IS'
 )
 SELECT c.id, c.ticker, c.name,
        r1.value as latest_revenue,
@@ -213,8 +228,8 @@ WITH margins AS (
   FROM companies_financial f1
   JOIN companies_financial f2 ON f1.company_id = f2.company_id
     AND f1.period_end_date = f2.period_end_date
-    AND f2.metric = 'Revenue' AND f2.statement = 'IS'
-  WHERE f1.metric = 'Operating Profit' AND f1.statement = 'IS'
+    AND f2.metric = 'Total Revenues' AND f2.statement = 'IS'
+  WHERE f1.metric = 'Operating Income' AND f1.statement = 'IS'
 ),
 recent AS (
   SELECT company_id, AVG(op_margin) as avg_margin
@@ -236,6 +251,18 @@ Example 3: "Companies in the Technology sector with market cap over 100 million"
 SELECT c.id, c.ticker, c.name, c.sector, c.market_cap
 FROM companies_company c
 WHERE c.sector = 'Technology' AND c.market_cap > 100000000
+
+Example 4: "Companies with positive gross profit (excludes banks/insurance that don't have this metric)"
+WITH gross AS (
+  SELECT company_id, period_end_date, value,
+         ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY period_end_date DESC) as rn
+  FROM companies_financial
+  WHERE metric = 'Gross Profit' AND statement = 'IS'
+)
+SELECT c.id, c.ticker, c.name, c.sector, g.value as gross_profit
+FROM companies_company c
+JOIN gross g ON c.id = g.company_id AND g.rn = 1
+WHERE g.value > 0
 """
 
     try:
