@@ -23,7 +23,7 @@ FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
 USE_TEST_TICKER = False
 TEST_TICKER_DEFAULT = "LSE-SHEL"
-SKIP_IF_CACHED = False
+SKIP_IF_CACHED = True
 SKIP_IF_FAILED = True
 
 
