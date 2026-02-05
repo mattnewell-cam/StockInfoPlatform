@@ -262,6 +262,83 @@ SUM_METRICS = [
     "Cash From Financing",
 ]
 
+# Fiscal data display transformations (display only, not stored)
+FISCAL_METRIC_RENAMES = {
+    "Total Revenues": "Revenue",
+    "Cost of Goods Sold, Total": "Cost of Goods Sold",
+    "Amort. of Goodwill & Intang. Assets": "Amortization",
+    "Amortization of Goodwill and Intangible Assets": "Amortization",
+    "Selling, General & Administrative Expenses": "SG&A",
+    "Selling General & Admin Expenses, Total": "SG&A",
+    "Other Operating Expenses, Total": "Other Operating Expenses",
+    "Net Interest Expenses": "Net Interest Expense",
+}
+
+FISCAL_METRICS_DROP = [
+    "Total Revenues % Chg.",
+    "Total Revenues %Chg",
+    "Operating Margin",
+    "Interest Expense",
+    "Interest Expense, Total",
+    "Interest And Invest. Income",
+    "Interest And Investment Income",
+    "Interest and Investment Income",
+    "Gross Profit Margin",
+]
+
+# Metrics to combine into other metrics (source -> target)
+FISCAL_METRICS_COMBINE = {
+    "Provision for Bad Debts": "Other Operating Expenses",
+}
+
+
+def transform_fiscal_items(items):
+    """
+    Transform Fiscal data metrics for display:
+    - Rename metrics
+    - Drop unwanted metrics
+    - Combine certain metrics
+    Returns transformed list of (metric, date, value) tuples.
+    """
+    # First pass: collect values to combine
+    combine_values = {}  # (target_metric, date) -> sum of values to add
+    for metric, date, value in items:
+        if metric in FISCAL_METRICS_COMBINE:
+            target = FISCAL_METRICS_COMBINE[metric]
+            key = (target, date)
+            combine_values[key] = combine_values.get(key, 0) + (value or 0)
+
+    # Second pass: transform items
+    result = []
+    seen = set()  # Track (metric, date) to avoid duplicates after rename
+
+    for metric, date, value in items:
+        # Skip dropped metrics
+        if metric in FISCAL_METRICS_DROP:
+            continue
+
+        # Skip metrics being combined into others
+        if metric in FISCAL_METRICS_COMBINE:
+            continue
+
+        # Rename metric if needed
+        display_metric = FISCAL_METRIC_RENAMES.get(metric, metric)
+
+        # Add combined values if this is a target metric
+        key = (display_metric, date)
+        if key in combine_values:
+            value = (value or 0) + combine_values[key]
+            del combine_values[key]  # Only add once
+
+        # Avoid duplicates (e.g., if two source metrics rename to same target)
+        if (display_metric, date) in seen:
+            continue
+        seen.add((display_metric, date))
+
+        result.append((display_metric, date, value))
+
+    return result
+
 def pivot_items(items, metrics=None):
     """
     Pivot financial items into a table format.
@@ -330,10 +407,10 @@ class CompanyDetailView(DetailView):
             ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
             ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
         else:
-            # Show all available metrics for Fiscal data
-            ctx["IS_table"] = pivot_items(buckets["IS"])
-            ctx["BS_table"] = pivot_items(buckets["BS"])
-            ctx["CF_table"] = pivot_items(buckets["CF"])
+            # Transform Fiscal data for display (renames, drops, combines)
+            ctx["IS_table"] = pivot_items(transform_fiscal_items(buckets["IS"]))
+            ctx["BS_table"] = pivot_items(transform_fiscal_items(buckets["BS"]))
+            ctx["CF_table"] = pivot_items(transform_fiscal_items(buckets["CF"]))
 
         # Price data for chart
         prices = StockPrice.objects.filter(company=self.object).order_by('date')
@@ -655,7 +732,9 @@ def intraday_prices(request, ticker, period):
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
-    yf_ticker = yf.Ticker(f"{ticker}.L")
+    # Replace dots with hyphens for yfinance (e.g., BT.A -> BT-A)
+    yf_symbol = ticker.replace('.', '-')
+    yf_ticker = yf.Ticker(f"{yf_symbol}.L")
 
     # Map period to yfinance parameters
     period_config = {

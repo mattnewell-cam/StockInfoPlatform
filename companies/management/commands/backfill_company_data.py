@@ -1,11 +1,20 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company
 import yfinance as yf
+import signal
 import time
 
 
+class TimeoutError(Exception):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("Timed out")
+
+
 class Command(BaseCommand):
-    help = "Backfill country, sector, exchange, industry for existing companies from yfinance."
+    help = "Backfill name, exchange, currency, market_cap, shares from yfinance."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -18,13 +27,22 @@ class Command(BaseCommand):
             action='store_true',
             help='Show what would be updated without making changes',
         )
+        parser.add_argument(
+            '--names-only',
+            action='store_true',
+            help='Only update companies where name == ticker (stub companies)',
+        )
 
     def handle(self, *args, **options):
         ticker = options.get('ticker')
         dry_run = options.get('dry_run')
+        names_only = options.get('names_only')
 
         if ticker:
             companies = Company.objects.filter(ticker=ticker)
+        elif names_only:
+            # Only companies where name equals ticker (stubs)
+            companies = Company.objects.extra(where=['name = ticker'])
         else:
             companies = Company.objects.all()
 
@@ -38,45 +56,72 @@ class Command(BaseCommand):
 
         for i, company in enumerate(companies, 1):
             try:
+                # Set 60 second timeout for get_info call
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(60)
+
                 yf_ticker = yf.Ticker(f"{company.ticker}.L")
                 info = yf_ticker.get_info()
 
-                country = info.get("country", "")
-                sector = info.get("sectorDisp", "") or info.get("sector", "")
-                industry = info.get("industryDisp", "") or info.get("industry", "")
+                signal.alarm(0)  # Cancel the alarm
+
+                # Extract fields
+                name = info.get("longName") or info.get("shortName") or ""
+                if name:
+                    name = name.replace("Public Limited Company", "plc")
                 exchange = info.get("exchange", "")
+                currency = info.get("currency", "")
+                market_cap = info.get("marketCap")
+                shares = info.get("sharesOutstanding")
+
+                # Convert to int if present
+                if market_cap:
+                    market_cap = int(market_cap)
+                if shares:
+                    shares = int(shares)
 
                 changes = []
-                if country and company.country != country:
-                    changes.append(f"country: '{company.country}' -> '{country}'")
-                    if not dry_run:
-                        company.country = country
+                update_fields = []
 
-                if sector and company.sector != sector:
-                    changes.append(f"sector: '{company.sector}' -> '{sector}'")
+                if name and company.name != name:
+                    changes.append(f"name: '{company.name}' -> '{name}'")
                     if not dry_run:
-                        company.sector = sector
-
-                if industry and company.industry != industry:
-                    changes.append(f"industry: '{company.industry}' -> '{industry}'")
-                    if not dry_run:
-                        company.industry = industry
+                        company.name = name
+                    update_fields.append('name')
 
                 if exchange and company.exchange != exchange:
                     changes.append(f"exchange: '{company.exchange}' -> '{exchange}'")
                     if not dry_run:
                         company.exchange = exchange
+                    update_fields.append('exchange')
+
+                if currency and company.currency != currency:
+                    changes.append(f"currency: '{company.currency}' -> '{currency}'")
+                    if not dry_run:
+                        company.currency = currency
+                    update_fields.append('currency')
+
+                if market_cap and company.market_cap != market_cap:
+                    changes.append(f"market_cap: {company.market_cap} -> {market_cap}")
+                    if not dry_run:
+                        company.market_cap = market_cap
+                    update_fields.append('market_cap')
+
+                if shares and company.shares_outstanding != shares:
+                    changes.append(f"shares: {company.shares_outstanding} -> {shares}")
+                    if not dry_run:
+                        company.shares_outstanding = shares
+                    update_fields.append('shares_outstanding')
 
                 if changes:
                     self.stdout.write(f"[{i}/{total}] {company.ticker}: {', '.join(changes)}")
-                    if not dry_run:
-                        company.save(update_fields=['country', 'sector', 'industry', 'exchange'])
+                    if not dry_run and update_fields:
+                        company.save(update_fields=update_fields)
                     updated += 1
                 else:
                     self.stdout.write(f"[{i}/{total}] {company.ticker}: no changes needed")
 
-                # Rate limit to avoid hitting yfinance too hard
-                time.sleep(0.5)
+                time.sleep(3)  # Longer delay for get_info to avoid rate limits
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"[{i}/{total}] {company.ticker}: FAILED - {e}"))

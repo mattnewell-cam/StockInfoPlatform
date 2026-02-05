@@ -20,11 +20,11 @@ WORKERS_DEFAULT = 4
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
 FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
-DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
+DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 USE_TEST_TICKER = False
 TEST_TICKER_DEFAULT = "LSE-SHEL"
 SKIP_IF_CACHED = True
-SKIP_IF_FAILED = True
+SKIP_IF_FAILED = False  # Retry failed tickers
 
 
 def ensure_django():
@@ -375,8 +375,8 @@ def main():
     )
     parser.add_argument(
         "--exchange",
-        default="LSE",
-        help="Exchange prefix for fiscal.ai tickers (default: LSE)",
+        default="AIM",
+        help="Exchange prefix for fiscal.ai tickers (default: AIM)",
     )
     parser.add_argument(
         "--out-json",
