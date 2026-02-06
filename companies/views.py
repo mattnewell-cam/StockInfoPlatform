@@ -272,6 +272,9 @@ FISCAL_METRIC_RENAMES = {
     "Selling General & Admin Expenses, Total": "SG&A",
     "Other Operating Expenses, Total": "Other Operating Expenses",
     "Net Interest Expenses": "Net Interest Expense",
+    "EBT, Incl. Unusual Items": "Profit Before Tax",
+    "Weighted Avg. Shares Outstanding": "Basic Avg. Shares Outstanding",
+    "Weighted Avg. Shares Outstanding Dil": "Diluted Avg. Shares Outstanding",
 }
 
 FISCAL_METRICS_DROP = [
@@ -284,12 +287,50 @@ FISCAL_METRICS_DROP = [
     "Interest And Investment Income",
     "Interest and Investment Income",
     "Gross Profit Margin",
+    "Earnings From Continuing Operations",
+    "Net Income to Common Excl. Extra Items",
+    "Net Income to Common Incl Extra Items",
+    "Total Shares Outstanding",
+    "EBT, Excl. Unusual Items",
+    "Basic EPS",
+    "Diluted EPS",
+    "EPS",
+    "EPS Diluted",
+    "Basic Weighted Average Shares Outstanding",
+    "Diluted Weighted Average Shares Outstanding",
+    "EBITDA",
+    "Effective Tax Rate",
 ]
 
 # Metrics to combine into other metrics (source -> target)
 FISCAL_METRICS_COMBINE = {
     "Provision for Bad Debts": "Other Operating Expenses",
+    # Equity investment income into Other Non Operating
+    "(Income) Loss on Equity Invest.": "Other Non Operating Income (Expenses)",
+    "Income (Loss) On Equity Invest.": "Other Non Operating Income (Expenses)",
+    "Income (Loss) on Equity Invest.": "Other Non Operating Income (Expenses)",
 }
+
+# Metrics that roll up into "Exceptional Items" (expandable)
+EXCEPTIONAL_ITEMS_METRICS = [
+    "Restructuring Charges",
+    "Merger & Related Restructuring Charges",
+    "Total Merger & Related Restructuring Charges",
+    "Impairment of Goodwill",
+    "Impairment of Oil, Gas & Mineral Properties",
+    "Gain (Loss) On Sale Of Assets",
+    "Gain (Loss) on Sale of Assets",
+    "Gain (Loss) on Sale of Assets, Total",
+    "Asset Writedown",
+    "Other Unusual Items",
+    "Legal Settlements",
+    "In Process R&D Expenses",
+    "Gain (Loss) On Sale Of Investments",
+    "Gain (Loss) on Sale of Investments",
+    "Gain (Loss) on Sale of Investments, Total",
+    "Gain (Loss) on Sale of Invest. & Securities",
+    "Gain (Loss) on Sale of Investment, Total",
+]
 
 
 def transform_fiscal_items(items):
@@ -298,19 +339,43 @@ def transform_fiscal_items(items):
     - Rename metrics
     - Drop unwanted metrics
     - Combine certain metrics
-    Returns transformed list of (metric, date, value) tuples.
+    - Group exceptional items
+    - Insert PBT before Exceptional Items, then Exceptional Items, then Profit Before Tax
+    Returns (transformed_items, exceptional_breakdown) where:
+    - transformed_items: list of (metric, date, value) tuples
+    - exceptional_breakdown: dict of {date: [(metric, value), ...]} for exceptional items
     """
-    # First pass: collect values to combine
-    combine_values = {}  # (target_metric, date) -> sum of values to add
+    from collections import defaultdict
+    from decimal import Decimal
+
+    def to_float(v):
+        if v is None:
+            return 0.0
+        if isinstance(v, Decimal):
+            return float(v)
+        return float(v) if v else 0.0
+
+    # First pass: collect values to combine, exceptional items, and PBT values
+    combine_values = defaultdict(float)  # (target_metric, date) -> sum
+    exceptional_by_date = defaultdict(list)  # date -> [(metric, value), ...]
+    exceptional_totals = defaultdict(float)  # date -> total
+    pbt_values = {}  # date -> Profit Before Tax value
+
     for metric, date, value in items:
         if metric in FISCAL_METRICS_COMBINE:
             target = FISCAL_METRICS_COMBINE[metric]
-            key = (target, date)
-            combine_values[key] = combine_values.get(key, 0) + (value or 0)
+            combine_values[(target, date)] += to_float(value)
+        elif metric in EXCEPTIONAL_ITEMS_METRICS:
+            if value:
+                exceptional_by_date[date].append((metric, float(value) if value else 0))
+                exceptional_totals[date] += to_float(value)
+        elif metric == "EBT, Incl. Unusual Items":
+            pbt_values[date] = to_float(value)
 
-    # Second pass: transform items
+    # Second pass: transform items (skip Profit Before Tax, we'll add it later)
     result = []
-    seen = set()  # Track (metric, date) to avoid duplicates after rename
+    seen = set()
+    has_exceptional = bool(exceptional_totals)
 
     for metric, date, value in items:
         # Skip dropped metrics
@@ -321,23 +386,115 @@ def transform_fiscal_items(items):
         if metric in FISCAL_METRICS_COMBINE:
             continue
 
+        # Skip exceptional items (handled separately)
+        if metric in EXCEPTIONAL_ITEMS_METRICS:
+            continue
+
+        # Skip Profit Before Tax - we'll insert it after Exceptional Items
+        if metric == "EBT, Incl. Unusual Items":
+            continue
+
         # Rename metric if needed
         display_metric = FISCAL_METRIC_RENAMES.get(metric, metric)
 
         # Add combined values if this is a target metric
         key = (display_metric, date)
         if key in combine_values:
-            value = (value or 0) + combine_values[key]
-            del combine_values[key]  # Only add once
+            value = to_float(value) + combine_values[key]
+            del combine_values[key]
 
-        # Avoid duplicates (e.g., if two source metrics rename to same target)
+        # Avoid duplicates
         if (display_metric, date) in seen:
             continue
         seen.add((display_metric, date))
 
         result.append((display_metric, date, value))
 
-    return result
+    # Build PBT items to insert before Income Tax Expense
+    pbt_items = []
+    if has_exceptional:
+        # PBT before Exceptional Items = Profit Before Tax - Exceptional Items
+        for date in pbt_values:
+            pbt = pbt_values[date]
+            exc = exceptional_totals.get(date, 0)
+            pbt_items.append(("PBT before Exceptional Items", date, pbt - exc))
+
+        # Exceptional Items
+        for date, total in exceptional_totals.items():
+            pbt_items.append(("Exceptional Items", date, total))
+
+        # Profit Before Tax
+        for date, pbt in pbt_values.items():
+            pbt_items.append(("Profit Before Tax", date, pbt))
+    else:
+        # No exceptional items - just add Profit Before Tax
+        for date, pbt in pbt_values.items():
+            pbt_items.append(("Profit Before Tax", date, pbt))
+
+    # Find position to insert (before Income Tax Expense)
+    insert_pos = len(result)
+    for i, (metric, _, _) in enumerate(result):
+        if metric == "Income Tax Expense":
+            insert_pos = i
+            break
+
+    # Insert PBT items at the right position
+    result = result[:insert_pos] + pbt_items + result[insert_pos:]
+
+    return result, dict(exceptional_by_date)
+
+def pivot_fiscal_items(items, exceptional_breakdown=None):
+    """
+    Pivot Fiscal data items with support for expandable exceptional items.
+    """
+    if not items:
+        return {"dates": [], "rows": []}
+
+    dates = sorted({d for _, d, _ in items}, reverse=True)
+    lookup = {(m, d): v for m, d, v in items}
+
+    # Get metrics in order they appear
+    metrics = []
+    seen = set()
+    for m, _, _ in items:
+        if m not in seen:
+            metrics.append(m)
+            seen.add(m)
+
+    rows = []
+    for m in metrics:
+        values = [lookup.get((m, d)) for d in dates]
+        if any(v is not None for v in values):
+            row = {
+                "metric": m,
+                "values": values,
+                "sum_metric": m in SUM_METRICS,
+                "expandable": False,
+                "breakdown": [],
+            }
+            # Add breakdown for Exceptional Items
+            if m == "Exceptional Items" and exceptional_breakdown:
+                row["expandable"] = True
+                # Get all unique breakdown metrics across all dates
+                breakdown_metrics = {}
+                for d in dates:
+                    if d in exceptional_breakdown:
+                        for bm, bv in exceptional_breakdown[d]:
+                            if bm not in breakdown_metrics:
+                                breakdown_metrics[bm] = {}
+                            breakdown_metrics[bm][d] = bv
+                # Build breakdown rows
+                for bm in breakdown_metrics:
+                    brow = {
+                        "metric": bm,
+                        "values": [breakdown_metrics[bm].get(d) for d in dates],
+                    }
+                    row["breakdown"].append(brow)
+            rows.append(row)
+
+    dates = [d.strftime("%b %Y") for d in dates]
+    return {"dates": dates, "rows": rows}
+
 
 def pivot_items(items, metrics=None):
     """
@@ -407,10 +564,13 @@ class CompanyDetailView(DetailView):
             ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
             ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
         else:
-            # Transform Fiscal data for display (renames, drops, combines)
-            ctx["IS_table"] = pivot_items(transform_fiscal_items(buckets["IS"]))
-            ctx["BS_table"] = pivot_items(transform_fiscal_items(buckets["BS"]))
-            ctx["CF_table"] = pivot_items(transform_fiscal_items(buckets["CF"]))
+            # Transform Fiscal data for display (renames, drops, combines, exceptional items)
+            is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
+            bs_items, _ = transform_fiscal_items(buckets["BS"])
+            cf_items, _ = transform_fiscal_items(buckets["CF"])
+            ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
+            ctx["BS_table"] = pivot_fiscal_items(bs_items)
+            ctx["CF_table"] = pivot_fiscal_items(cf_items)
 
         # Price data for chart
         prices = StockPrice.objects.filter(company=self.object).order_by('date')

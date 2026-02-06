@@ -10,8 +10,14 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
             {% for row in table.rows %}
-            <tr class="{% if row.sum_metric %}font-semibold bg-gray-50{% else %}hover:bg-gray-50{% endif %}">
-                <td class="py-1.5 pr-4 text-gray-900 whitespace-nowrap">{{ row.metric }}</td>
+            <tr class="{% if row.sum_metric %}font-semibold bg-gray-50{% else %}hover:bg-gray-50{% endif %}{% if row.expandable %} cursor-pointer{% endif %}"
+                {% if row.expandable %}onclick="toggleBreakdown(this)"{% endif %}>
+                <td class="py-1.5 pr-4 text-gray-900 whitespace-nowrap">
+                    {% if row.expandable %}
+                    <span class="expand-icon inline-block w-4 text-gray-400 mr-1">▶</span>
+                    {% endif %}
+                    {{ row.metric }}
+                </td>
                 {% for v in row.values %}
                     {% load humanize %}
                     {% if not v %}
@@ -21,7 +27,38 @@
                     {% endif %}
                 {% endfor %}
             </tr>
+            {% if row.expandable and row.breakdown %}
+            {% for brow in row.breakdown %}
+            <tr class="breakdown-row hidden bg-gray-50/50 text-gray-500 text-xs">
+                <td class="py-1 pr-4 pl-6 whitespace-nowrap italic">{{ brow.metric }}</td>
+                {% for v in brow.values %}
+                    {% if not v %}
+                    <td class="text-right py-1 px-2 text-gray-300">-</td>
+                    {% else %}
+                    <td class="text-right py-1 px-2">{{ v|floatformat:0|intcomma }}</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+<script>
+function toggleBreakdown(row) {
+    const icon = row.querySelector('.expand-icon');
+    let sibling = row.nextElementSibling;
+    const isExpanded = icon.textContent === '▼';
+
+    // Toggle all following breakdown rows
+    while (sibling && sibling.classList.contains('breakdown-row')) {
+        sibling.classList.toggle('hidden');
+        sibling = sibling.nextElementSibling;
+    }
+
+    // Toggle icon
+    icon.textContent = isExpanded ? '▶' : '▼';
+}
+</script>
