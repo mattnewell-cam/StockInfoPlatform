@@ -21,6 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
 FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
 DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
+DEFAULT_EXCHANGE_CSV = str((BASE_DIR / ".." / "ticker_exchanges.csv").resolve())
 USE_TEST_TICKER = False
 TEST_TICKER_DEFAULT = "LSE-SHEL"
 SKIP_IF_CACHED = True
@@ -202,6 +203,28 @@ def extract_rows_from_table(table_root):
     return parsed
 
 
+def extract_all_tables_from_page(driver):
+    """Find all TableContent elements on the page and extract rows from each."""
+    elements = driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]')
+    tables = []
+    for el in elements:
+        rows = extract_rows_from_table(el)
+        if rows:
+            tables.append(rows)
+    return tables
+
+
+def find_table_by_name(tables, name):
+    """Find a table whose first row's first cell matches the given name."""
+    name_lower = name.strip().lower()
+    for table in tables:
+        if table and table[0]:
+            label = table[0][0].strip().lower()
+            if label == name_lower:
+                return table
+    return None
+
+
 def load_statement_table(driver, ticker, slug, expand_slider=True, fast_mode=False):
     url = f"{URL}/company/{ticker}/financials/{slug}/annual/"
     driver.get(url)
@@ -292,6 +315,84 @@ STATEMENT_SLUGS = {
     "CF": ["cash-flow-statement"],
 }
 
+SUPPLEMENTAL_TABLES = {
+    "BS": {
+        "slug": "balance-sheet",
+        "names": ["Liabilities", "Equity"],
+    },
+    "CF": {
+        "slug": "cash-flow-statement",
+        "names": ["Investing Activities", "Financing Activities"],
+    },
+}
+
+
+def load_page_all_tables(driver, ticker, slug, expand_slider=True, fast_mode=False):
+    """Load a statement page and return all tables found on it."""
+    url = f"{URL}/company/{ticker}/financials/{slug}/annual/"
+    driver.get(url)
+    wait_for(driver, By.TAG_NAME, "body", timeout=15)
+    if not fast_mode:
+        time.sleep(1)
+
+    quick_missing_check(driver, ticker, timeout=3 if fast_mode else 5)
+
+    if expand_slider:
+        key_delay = 0.005 if fast_mode else 0.02
+        set_slider_range(driver, min_val=5, max_val=22, key_delay=key_delay)
+
+    # Wait for at least one table with rows
+    WebDriverWait(driver, 20).until(
+        lambda d: len(
+            d.find_elements(
+                By.CSS_SELECTOR,
+                '[data-sentry-component="TableContent"] tr, '
+                '[data-sentry-component="TableContent"] [role="row"]',
+            )
+        )
+        > 1
+    )
+    # Extra time for all sub-tables to render
+    time.sleep(1.5 if not fast_mode else 0.5)
+
+    return extract_all_tables_from_page(driver)
+
+
+def pull_supplemental(driver, ticker, exchange="LSE", expand_slider=True, fast_mode=False):
+    """Pull missing sub-tables (Liabilities, Equity, Investing, Financing) for a cached ticker."""
+
+    def run_for_exchange(exch):
+        fiscal_ticker = build_fiscal_ticker(ticker, exch)
+        result = {}
+        for statement, config in SUPPLEMENTAL_TABLES.items():
+            all_tables = load_page_all_tables(
+                driver,
+                fiscal_ticker,
+                config["slug"],
+                expand_slider=expand_slider,
+                fast_mode=fast_mode,
+            )
+            print(f"  Found {len(all_tables)} table(s) on {config['slug']} page for {ticker}")
+            found_rows = []
+            for name in config["names"]:
+                table = find_table_by_name(all_tables, name)
+                if table:
+                    found_rows.extend(table)
+                    print(f"  Found '{name}' table ({len(table)} rows)")
+                else:
+                    print(f"  Warning: Could not find '{name}' table for {ticker}")
+            if found_rows:
+                result[statement] = found_rows
+        return result
+
+    try:
+        return run_for_exchange(exchange), exchange
+    except Exception as exc:
+        if exchange != "AIM" and "not found" in str(exc).lower():
+            print(f"{ticker} not found on {exchange}. Retrying with AIM.")
+            return run_for_exchange("AIM"), "AIM"
+        raise
+
 
 def pull_financials(driver, ticker, exchange="LSE", expand_slider=True, fast_mode=False):
     def run_for_exchange(exch):
@@ -318,11 +419,11 @@ def pull_financials(driver, ticker, exchange="LSE", expand_slider=True, fast_mod
         return rows_by_statement
 
     try:
-        return run_for_exchange(exchange)
+        return run_for_exchange(exchange), exchange
     except Exception as exc:
         if exchange != "AIM" and "not found" in str(exc).lower():
             print(f"{ticker} not found on {exchange}. Retrying with AIM.")
-            return run_for_exchange("AIM")
+            return run_for_exchange("AIM"), "AIM"
         raise
 
 
@@ -350,6 +451,25 @@ def load_failed_set(path):
     return failed
 
 
+def load_exchange_map(path):
+    if not Path(path).exists():
+        return {}
+    mapping = {}
+    with open(path, newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) >= 2:
+                mapping[row[0]] = row[1]
+    return mapping
+
+
+def save_exchange_map(path, mapping):
+    with open(path, "w", newline="") as f:
+        writer = csv.writer(f)
+        for ticker, exchange in sorted(mapping.items()):
+            writer.writerow([ticker, exchange])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Fetch fiscal.ai financials and store in cached_financials.json.")
     parser.add_argument(
@@ -375,8 +495,8 @@ def main():
     )
     parser.add_argument(
         "--exchange",
-        default="AIM",
-        help="Exchange prefix for fiscal.ai tickers (default: AIM)",
+        default="LSE",
+        help="Exchange prefix for fiscal.ai tickers (default: LSE)",
     )
     parser.add_argument(
         "--out-json",
@@ -397,6 +517,11 @@ def main():
         "--failed-csv",
         default=FAILED_CSV_DEFAULT,
         help="Path for CSV list of tickers that failed",
+    )
+    parser.add_argument(
+        "--exchange-csv",
+        default=DEFAULT_EXCHANGE_CSV,
+        help="Path for CSV mapping tickers to their working exchange (default: ticker_exchanges.csv)",
     )
     parser.add_argument(
         "--no-slider",
@@ -432,7 +557,18 @@ def main():
             chunks[idx % workers].append(item)
         return [c for c in chunks if c]
 
-    def worker_run(worker_id, driver, tickers, cached, failed_existing, lock):
+    def needs_supplemental(ticker_data):
+        """Check if a cached ticker is missing any supplemental tables."""
+        for stmt, config in SUPPLEMENTAL_TABLES.items():
+            if stmt not in ticker_data:
+                return True
+            existing_labels = {row[0].strip().lower() for row in ticker_data[stmt] if row}
+            for name in config["names"]:
+                if name.strip().lower() not in existing_labels:
+                    return True
+        return False
+
+    def worker_run(worker_id, driver, tickers, cached, failed_existing, exchange_map, lock):
         failed = []
         fast_mode = args.fast and not args.no_fast
         for t in tickers:
@@ -442,35 +578,80 @@ def main():
                 if SKIP_IF_FAILED and t in failed_existing:
                     print(f"[{worker_id}] {t} is in failed list. Skipping.")
                     continue
-                if SKIP_IF_CACHED and t in cached:
+
+                is_cached = t in cached
+
+                # If cached, check if supplemental data is needed
+                if is_cached and not needs_supplemental(cached[t]):
+                    print(f"[{worker_id}] {t} already has full data. Skipping.")
+                    continue
+
+                if not is_cached and args.no_overwrite and t in cached:
                     print(f"[{worker_id}] {t} already cached. Skipping.")
                     continue
-                if args.no_overwrite and t in cached:
-                    print(f"[{worker_id}] {t} already cached. Skipping.")
-                    continue
-            try:
-                financials = pull_financials(
-                    driver,
-                    t,
-                    exchange=args.exchange,
-                    expand_slider=not args.no_slider,
-                    fast_mode=fast_mode,
-                )
-                with lock:
-                    cached[t] = financials
-                    save_cached_json(args.out_json, cached)
-                print(f"[{worker_id}] Saved cached financials for {t}")
-            except Exception as e:
-                print(f"[{worker_id}] Failed {t}: {e}")
-                failed.append(t)
-                with lock:
-                    failed_existing.add(t)
-                    try:
-                        with open(args.failed_csv, "a", newline="") as f:
-                            writer = csv.writer(f)
-                            writer.writerow([t])
-                    except Exception as write_exc:
-                        print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
+
+                # Use known exchange if we have one, otherwise fall back to default
+                ticker_exchange = exchange_map.get(t, args.exchange)
+
+            if is_cached:
+                # Pull only the missing supplemental tables
+                try:
+                    print(f"[{worker_id}] {t} cached but missing sub-tables. Pulling supplemental (trying {ticker_exchange})...")
+                    supplemental, used_exchange = pull_supplemental(
+                        driver,
+                        t,
+                        exchange=ticker_exchange,
+                        expand_slider=not args.no_slider,
+                        fast_mode=fast_mode,
+                    )
+                    with lock:
+                        for stmt, rows in supplemental.items():
+                            if stmt in cached[t]:
+                                cached[t][stmt].extend(rows)
+                            else:
+                                cached[t][stmt] = rows
+                        save_cached_json(args.out_json, cached)
+                        exchange_map[t] = used_exchange
+                        save_exchange_map(args.exchange_csv, exchange_map)
+                    print(f"[{worker_id}] Saved supplemental data for {t} (exchange: {used_exchange})")
+                except Exception as e:
+                    print(f"[{worker_id}] Failed supplemental for {t}: {e}")
+                    failed.append(t)
+                    with lock:
+                        failed_existing.add(t)
+                        try:
+                            with open(args.failed_csv, "a", newline="") as f:
+                                writer = csv.writer(f)
+                                writer.writerow([t])
+                        except Exception as write_exc:
+                            print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
+            else:
+                # Full pull for new tickers
+                try:
+                    financials, used_exchange = pull_financials(
+                        driver,
+                        t,
+                        exchange=ticker_exchange,
+                        expand_slider=not args.no_slider,
+                        fast_mode=fast_mode,
+                    )
+                    with lock:
+                        cached[t] = financials
+                        save_cached_json(args.out_json, cached)
+                        exchange_map[t] = used_exchange
+                        save_exchange_map(args.exchange_csv, exchange_map)
+                    print(f"[{worker_id}] Saved cached financials for {t} (exchange: {used_exchange})")
+                except Exception as e:
+                    print(f"[{worker_id}] Failed {t}: {e}")
+                    failed.append(t)
+                    with lock:
+                        failed_existing.add(t)
+                        try:
+                            with open(args.failed_csv, "a", newline="") as f:
+                                writer = csv.writer(f)
+                                writer.writerow([t])
+                        except Exception as write_exc:
+                            print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
         return failed
 
     drivers = []
@@ -486,6 +667,7 @@ def main():
 
         cached = load_cached_json(args.out_json)
         failed_existing = load_failed_set(args.failed_csv)
+        exchange_map = load_exchange_map(args.exchange_csv)
 
         workers = WORKERS_DEFAULT
         chunks = split_chunks(tickers, workers)
@@ -510,7 +692,7 @@ def main():
         with ThreadPoolExecutor(max_workers=len(chunks)) as executor:
             futures = []
             for idx, (d, chunk) in enumerate(zip(drivers, chunks), start=1):
-                futures.append(executor.submit(worker_run, idx, d, chunk, cached, failed_existing, lock))
+                futures.append(executor.submit(worker_run, idx, d, chunk, cached, failed_existing, exchange_map, lock))
             for fut in as_completed(futures):
                 try:
                     failed.extend(fut.result())
