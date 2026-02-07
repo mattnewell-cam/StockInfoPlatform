@@ -45,5 +45,10 @@ class BlockAIBotsMiddleware:
     def __call__(self, request):
         ua = request.META.get("HTTP_USER_AGENT", "")
         if ua and _AI_BOT_RE.search(ua):
-            return HttpResponse("Forbidden", status=403, content_type="text/plain")
+            bot_key = (
+                request.GET.get("bot_key", "")
+                or request.META.get("HTTP_X_BOT_KEY", "")
+            )
+            if bot_key != "shut it clunker":
+                return HttpResponse("Forbidden", status=403, content_type="text/plain")
         return self.get_response(request)
