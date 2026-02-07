@@ -16,4 +16,6 @@ urlpatterns = [
     path("<str:ticker>/chat/sessions/", views.chat_sessions, name="chat-sessions"),
     path("<str:ticker>/chat/sessions/<int:session_id>/", views.chat_session_messages, name="chat-session-messages"),
     path("<str:ticker>/chat/sessions/<int:session_id>/send/", views.chat_send_message, name="chat-send-message"),
+    path("<str:ticker>/chat/sessions/<int:session_id>/rename/", views.chat_session_rename, name="chat-session-rename"),
+    path("<str:ticker>/chat/sessions/<int:session_id>/delete/", views.chat_session_delete, name="chat-session-delete"),
 ]

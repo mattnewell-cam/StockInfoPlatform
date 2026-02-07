@@ -140,8 +140,8 @@ class Command(BaseCommand):
             # Get or create company
             try:
                 company = Company.objects.get(ticker=ticker)
-                if not OVERWRITE:
-                    self.stdout.write(f"  Already exists, skipping")
+                if not OVERWRITE and company.financials.exists():
+                    self.stdout.write(f"  Already has financials, skipping")
                     continue
             except Company.DoesNotExist:
                 if skip_create:

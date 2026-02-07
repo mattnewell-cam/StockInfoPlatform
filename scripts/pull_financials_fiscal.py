@@ -20,8 +20,7 @@ WORKERS_DEFAULT = 4
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
 FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
-DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
-DEFAULT_EXCHANGE_CSV = str((BASE_DIR / ".." / "ticker_exchanges.csv").resolve())
+DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
 USE_TEST_TICKER = False
 TEST_TICKER_DEFAULT = "LSE-SHEL"
 SKIP_IF_CACHED = True
@@ -388,9 +387,10 @@ def pull_supplemental(driver, ticker, exchange="LSE", expand_slider=True, fast_m
     try:
         return run_for_exchange(exchange), exchange
     except Exception as exc:
-        if exchange != "AIM" and "not found" in str(exc).lower():
-            print(f"{ticker} not found on {exchange}. Retrying with AIM.")
-            return run_for_exchange("AIM"), "AIM"
+        if "not found" in str(exc).lower():
+            fallback = "AIM" if exchange != "AIM" else "LSE"
+            print(f"{ticker} not found on {exchange}. Retrying with {fallback}.")
+            return run_for_exchange(fallback), fallback
         raise
 
 
@@ -421,9 +421,10 @@ def pull_financials(driver, ticker, exchange="LSE", expand_slider=True, fast_mod
     try:
         return run_for_exchange(exchange), exchange
     except Exception as exc:
-        if exchange != "AIM" and "not found" in str(exc).lower():
-            print(f"{ticker} not found on {exchange}. Retrying with AIM.")
-            return run_for_exchange("AIM"), "AIM"
+        if "not found" in str(exc).lower():
+            fallback = "AIM" if exchange != "AIM" else "LSE"
+            print(f"{ticker} not found on {exchange}. Retrying with {fallback}.")
+            return run_for_exchange(fallback), fallback
         raise
 
 
@@ -451,24 +452,6 @@ def load_failed_set(path):
     return failed
 
 
-def load_exchange_map(path):
-    if not Path(path).exists():
-        return {}
-    mapping = {}
-    with open(path, newline="") as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if len(row) >= 2:
-                mapping[row[0]] = row[1]
-    return mapping
-
-
-def save_exchange_map(path, mapping):
-    with open(path, "w", newline="") as f:
-        writer = csv.writer(f)
-        for ticker, exchange in sorted(mapping.items()):
-            writer.writerow([ticker, exchange])
-
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch fiscal.ai financials and store in cached_financials.json.")
@@ -494,11 +477,6 @@ def main():
         help="Load tickers from --tickers-csv instead of --ticker",
     )
     parser.add_argument(
-        "--exchange",
-        default="LSE",
-        help="Exchange prefix for fiscal.ai tickers (default: LSE)",
-    )
-    parser.add_argument(
         "--out-json",
         default=DEFAULT_OUT_JSON,
         help="Output JSON path (default: cached_financials_2.json in repo root)",
@@ -517,11 +495,6 @@ def main():
         "--failed-csv",
         default=FAILED_CSV_DEFAULT,
         help="Path for CSV list of tickers that failed",
-    )
-    parser.add_argument(
-        "--exchange-csv",
-        default=DEFAULT_EXCHANGE_CSV,
-        help="Path for CSV mapping tickers to their working exchange (default: ticker_exchanges.csv)",
     )
     parser.add_argument(
         "--no-slider",
@@ -568,7 +541,7 @@ def main():
                     return True
         return False
 
-    def worker_run(worker_id, driver, tickers, cached, failed_existing, exchange_map, lock):
+    def worker_run(worker_id, driver, tickers, cached, failed_existing, ticker_market, lock):
         failed = []
         fast_mode = args.fast and not args.no_fast
         for t in tickers:
@@ -590,8 +563,7 @@ def main():
                     print(f"[{worker_id}] {t} already cached. Skipping.")
                     continue
 
-                # Use known exchange if we have one, otherwise fall back to default
-                ticker_exchange = exchange_map.get(t, args.exchange)
+                ticker_exchange = ticker_market.get(t, "LSE")
 
             if is_cached:
                 # Pull only the missing supplemental tables
@@ -611,20 +583,19 @@ def main():
                             else:
                                 cached[t][stmt] = rows
                         save_cached_json(args.out_json, cached)
-                        exchange_map[t] = used_exchange
-                        save_exchange_map(args.exchange_csv, exchange_map)
                     print(f"[{worker_id}] Saved supplemental data for {t} (exchange: {used_exchange})")
                 except Exception as e:
                     print(f"[{worker_id}] Failed supplemental for {t}: {e}")
                     failed.append(t)
                     with lock:
-                        failed_existing.add(t)
-                        try:
-                            with open(args.failed_csv, "a", newline="") as f:
-                                writer = csv.writer(f)
-                                writer.writerow([t])
-                        except Exception as write_exc:
-                            print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
+                        if t not in failed_existing:
+                            failed_existing.add(t)
+                            try:
+                                with open(args.failed_csv, "a", newline="") as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow([t])
+                            except Exception as write_exc:
+                                print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
             else:
                 # Full pull for new tickers
                 try:
@@ -638,28 +609,37 @@ def main():
                     with lock:
                         cached[t] = financials
                         save_cached_json(args.out_json, cached)
-                        exchange_map[t] = used_exchange
-                        save_exchange_map(args.exchange_csv, exchange_map)
                     print(f"[{worker_id}] Saved cached financials for {t} (exchange: {used_exchange})")
                 except Exception as e:
                     print(f"[{worker_id}] Failed {t}: {e}")
                     failed.append(t)
                     with lock:
-                        failed_existing.add(t)
-                        try:
-                            with open(args.failed_csv, "a", newline="") as f:
-                                writer = csv.writer(f)
-                                writer.writerow([t])
-                        except Exception as write_exc:
-                            print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
+                        if t not in failed_existing:
+                            failed_existing.add(t)
+                            try:
+                                with open(args.failed_csv, "a", newline="") as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow([t])
+                            except Exception as write_exc:
+                                print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
         return failed
 
     drivers = []
     try:
         use_csv = args.use_csv or not USE_TEST_TICKER
+        ticker_market = {}
         if use_csv:
             with open(args.tickers_csv, newline="") as f:
-                tickers = [row[0] for row in csv.reader(f) if row]
+                reader = csv.reader(f)
+                next(reader, None)  # skip header
+                tickers = []
+                for row in reader:
+                    if not row or not row[0].strip():
+                        continue
+                    ticker = row[0].strip()
+                    tickers.append(ticker)
+                    if len(row) >= 2 and row[1].strip():
+                        ticker_market[ticker] = row[1].strip()
         elif args.ticker:
             tickers = [args.ticker]
         else:
@@ -667,7 +647,6 @@ def main():
 
         cached = load_cached_json(args.out_json)
         failed_existing = load_failed_set(args.failed_csv)
-        exchange_map = load_exchange_map(args.exchange_csv)
 
         workers = WORKERS_DEFAULT
         chunks = split_chunks(tickers, workers)
@@ -692,7 +671,7 @@ def main():
         with ThreadPoolExecutor(max_workers=len(chunks)) as executor:
             futures = []
             for idx, (d, chunk) in enumerate(zip(drivers, chunks), start=1):
-                futures.append(executor.submit(worker_run, idx, d, chunk, cached, failed_existing, exchange_map, lock))
+                futures.append(executor.submit(worker_run, idx, d, chunk, cached, failed_existing, ticker_market, lock))
             for fut in as_completed(futures):
                 try:
                     failed.extend(fut.result())

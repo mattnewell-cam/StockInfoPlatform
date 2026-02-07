@@ -10,6 +10,9 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
             {% for row in table.rows %}
+            {% if row.spacer %}
+            <tr><td class="py-2" colspan="100"></td></tr>
+            {% else %}
             <tr class="{% if row.sum_metric %}font-semibold bg-gray-50{% else %}hover:bg-gray-50{% endif %}{% if row.expandable %} cursor-pointer{% endif %}"
                 {% if row.expandable %}onclick="toggleBreakdown(this)"{% endif %}>
                 <td class="py-1.5 pr-4 text-gray-900 whitespace-nowrap">
@@ -40,6 +43,7 @@
                 {% endfor %}
             </tr>
             {% endfor %}
+            {% endif %}
             {% endif %}
             {% endfor %}
         </tbody>

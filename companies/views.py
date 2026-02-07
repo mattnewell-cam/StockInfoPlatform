@@ -35,15 +35,21 @@ def search_api(request):
 
 def newsfeed_api(request):
     """Fetch latest FCA NSM filings, optionally filtered by type."""
-    types_param = request.GET.get("types", "").strip()
+    type_codes_param = request.GET.get("type_codes", "").strip()
     size = min(max(int(request.GET.get("size", 50)), 1), 200)
+
+    selected_codes = [t.strip() for t in type_codes_param.split(",") if t.strip()]
+
+    criteria = [{"name": "latest_flag", "value": "Y"}]
+    if selected_codes:
+        criteria.append({"name": "type_code", "value": selected_codes})
 
     payload = {
         "from": 0,
         "size": size,
         "sort": "submitted_date",
         "sortorder": "desc",
-        "criteriaObj": {"criteria": [{"name": "latest_flag", "value": "Y"}]},
+        "criteriaObj": {"criteria": criteria},
     }
 
     try:
@@ -60,26 +66,26 @@ def newsfeed_api(request):
         return JsonResponse({"error": str(e)}, status=502)
 
     hits = resp.json().get("hits", {}).get("hits", [])
-    selected = {t.strip().lower() for t in types_param.split(",") if t.strip()}
 
-    items, types = [], set()
+    items = []
+    type_map = {}
     for hit in hits:
         info = hit.get("_source", {})
         rns_type = info.get("type", "")
-        if rns_type:
-            types.add(rns_type)
-        if selected and rns_type.lower() not in selected:
-            continue
+        rns_code = info.get("type_code", "")
+        if rns_code and rns_type:
+            type_map[rns_code] = rns_type
         dl = info.get("download_link", "")
         items.append({
             "type": rns_type,
+            "type_code": rns_code,
             "headline": info.get("headline") or info.get("title") or "",
             "company": info.get("company") or info.get("company_name") or "",
             "date": info.get("submitted_date") or "",
             "url": f"https://data.fca.org.uk/artefacts/{dl}" if dl else "",
         })
 
-    return JsonResponse({"items": items, "types": sorted(types)})
+    return JsonResponse({"items": items, "type_map": type_map})
 
 
 def regulatory_newsfeed(request, ticker):
@@ -96,7 +102,7 @@ def regulatory_newsfeed(request, ticker):
             value = default
         return max(min_value, min(value, max_value))
 
-    types_param = request.GET.get("types", "").strip()
+    type_codes_param = request.GET.get("type_codes", "").strip()
     size = clamp_int(request.GET.get("size"), 20, 1, 200)
     offset = clamp_int(request.GET.get("from"), 0, 0, 10000)
 
@@ -108,9 +114,18 @@ def regulatory_newsfeed(request, ticker):
             "value": [company_name, "", "disclose_org", "related_org"],
         })
 
+    selected_codes = [t.strip() for t in type_codes_param.split(",") if t.strip()]
+    if selected_codes:
+        criteria.append({"name": "type_code", "value": selected_codes})
+
+    # On the initial unfiltered load, fetch a larger batch so we can
+    # discover all available filing types for the filter dropdown.
+    discover_types = not selected_codes and offset == 0
+    fetch_size = 200 if discover_types else size
+
     payload = {
         "from": offset,
-        "size": size,
+        "size": fetch_size,
         "sort": "submitted_date",
         "sortorder": "desc",
         "criteriaObj": {
@@ -136,31 +151,28 @@ def regulatory_newsfeed(request, ticker):
     data = resp.json()
     hits = data.get("hits", {}).get("hits", [])
 
-    selected_types = [t.strip() for t in types_param.split(",") if t.strip()]
-    selected_types_lower = {t.lower() for t in selected_types}
-
+    type_map = {}
     items = []
-    available_types = set()
-    for hit in hits:
+    for i, hit in enumerate(hits):
         info = hit.get("_source", {})
         rns_type = info.get("type", "") or ""
-        if rns_type:
-            available_types.add(rns_type)
-        if selected_types_lower:
-            if not rns_type or rns_type.lower() not in selected_types_lower:
-                continue
+        rns_code = info.get("type_code", "") or ""
+        if rns_code and rns_type:
+            type_map[rns_code] = rns_type
 
-        download_link = info.get("download_link", "") or ""
-        items.append({
-            "type": rns_type,
-            "headline": info.get("title")
-            or info.get("headline")
-            or info.get("document_title")
-            or "",
-            "company_name": info.get("company_name") or info.get("name") or "",
-            "submitted_date": info.get("submitted_date") or info.get("published_date") or "",
-            "download_url": f"https://data.fca.org.uk/artefacts/{download_link}" if download_link else "",
-        })
+        if i < size:
+            download_link = info.get("download_link", "") or ""
+            items.append({
+                "type": rns_type,
+                "type_code": rns_code,
+                "headline": info.get("title")
+                or info.get("headline")
+                or info.get("document_title")
+                or "",
+                "company_name": info.get("company_name") or info.get("name") or "",
+                "submitted_date": info.get("submitted_date") or info.get("published_date") or "",
+                "download_url": f"https://data.fca.org.uk/artefacts/{download_link}" if download_link else "",
+            })
 
     total_hits = data.get("hits", {}).get("total", {})
     total_count = None
@@ -171,7 +183,7 @@ def regulatory_newsfeed(request, ticker):
 
     return JsonResponse({
         "items": items,
-        "types": sorted(available_types),
+        "type_map": type_map,
         "company_filter_applied": bool(company_name),
         "offset": offset,
         "size": size,
@@ -199,16 +211,17 @@ METRICS_IS = [
     "Shares (Diluted)",
 ]
 METRICS_BS = [
-    "Cash & Equivalents",
+    "Cash & Short-Term Investments",
     "Accounts Receivable",
     "Inventories",
     "Other Current Assets",
     "Total Current Assets",
-    "Property, Plant, & Equipment (Net)",
+    "Property, Plant & Equipment",
     "Goodwill",
     "Other Intangible Assets",
     "Other Assets",
     "Total Assets",
+    None,  # spacer
     "Accounts Payable",
     "Tax Payable",
     "Short-Term Debt",
@@ -225,8 +238,17 @@ METRICS_BS = [
     "Common Stock",
     "Other",
     "Shareholders' Equity",
+    None,  # spacer
     "Liabilities & Equity",
 ]
+# QFS BS metrics that combine multiple DB metrics for display
+QFS_BS_COMBINE = {
+    "Cash & Short-Term Investments": ["Cash & Equivalents", "Short-Term Investments"],
+}
+# QFS BS metrics with display name different from DB name
+QFS_BS_RENAME = {
+    "Property, Plant & Equipment": "Property, Plant, & Equipment (Net)",
+}
 METRICS_CF = [
     "Net Income",
     "Depreciation & Amortization",
@@ -256,7 +278,13 @@ SUM_METRICS = [
     "Total Assets",
     "Total Current Liabilities",
     "Total Liabilities",
+    "Shareholders' Equity",
+    "Total Shareholders' Equity",
+    "Total Common Equity",
+    "Total Common Shareholders' Equity",
     "Liabilities & Equity",
+    "Total Liabilities And Equity",
+    "Total Liabilities and Shareholders' Equity",
     "Cash From Operations",
     "Cash From Investing",
     "Cash From Financing",
@@ -275,6 +303,8 @@ FISCAL_METRIC_RENAMES = {
     "EBT, Incl. Unusual Items": "Profit Before Tax",
     "Weighted Avg. Shares Outstanding": "Basic Avg. Shares Outstanding",
     "Weighted Avg. Shares Outstanding Dil": "Diluted Avg. Shares Outstanding",
+    "Net Property Plant And Equipment": "Property, Plant & Equipment",
+    "Net Property, Plant & Equipment": "Property, Plant & Equipment",
 }
 
 FISCAL_METRICS_DROP = [
@@ -300,6 +330,8 @@ FISCAL_METRICS_DROP = [
     "Diluted Weighted Average Shares Outstanding",
     "EBITDA",
     "Effective Tax Rate",
+    "Gross Property Plant And Equipment",
+    "Accumulated Depreciation",
 ]
 
 # Metrics to combine into other metrics (source -> target)
@@ -331,6 +363,52 @@ EXCEPTIONAL_ITEMS_METRICS = [
     "Gain (Loss) on Sale of Invest. & Securities",
     "Gain (Loss) on Sale of Investment, Total",
 ]
+
+
+def preprocess_fiscal_bs(items):
+    """
+    Pre-process Fiscal BS items: combine cash metrics into
+    'Cash & Short-Term Investments'. Uses the Total if available,
+    otherwise sums individual components.
+    """
+    CASH_COMPONENTS = {
+        "Cash And Equivalents", "Cash and Cash Equivalents",
+        "Short Term Investments", "Short-Term Investments",
+    }
+    CASH_TOTALS = {
+        "Total Cash And Short Term Investments",
+        "Total Cash and Cash Equivalents",
+    }
+    TARGET = "Cash & Short-Term Investments"
+
+    has_total = any(m in CASH_TOTALS for m, _, _ in items)
+
+    if has_total:
+        result = []
+        for m, d, v in items:
+            if m in CASH_TOTALS:
+                result.append((TARGET, d, v))
+            elif m in CASH_COMPONENTS:
+                continue
+            else:
+                result.append((m, d, v))
+        return result
+
+    # No total: sum individual components
+    cash_values = defaultdict(float)
+    insert_pos = None
+    result = []
+    for m, d, v in items:
+        if m in CASH_COMPONENTS:
+            cash_values[d] += float(v) if v else 0
+            if insert_pos is None:
+                insert_pos = len(result)
+        else:
+            result.append((m, d, v))
+    if cash_values:
+        cash_items = [(TARGET, d, v) for d, v in cash_values.items()]
+        result = result[:insert_pos] + cash_items + result[insert_pos:]
+    return result
 
 
 def transform_fiscal_items(items):
@@ -443,6 +521,15 @@ def transform_fiscal_items(items):
 
     return result, dict(exceptional_by_date)
 
+# Fiscal BS metrics that become blank spacer rows
+FISCAL_BS_SPACER_METRICS = {"Liabilities", "Equity"}
+# Fiscal BS metrics after which to insert a spacer row
+FISCAL_BS_SPACER_AFTER = {
+    "Total Equity", "Total Shareholders' Equity",
+    "Total Common Shareholders' Equity", "Shareholders' Equity",
+}
+
+
 def pivot_fiscal_items(items, exceptional_breakdown=None):
     """
     Pivot Fiscal data items with support for expandable exceptional items.
@@ -462,7 +549,13 @@ def pivot_fiscal_items(items, exceptional_breakdown=None):
             seen.add(m)
 
     rows = []
+    equity_spacer_added = False
     for m in metrics:
+        # Convert section headers to spacer rows
+        if m in FISCAL_BS_SPACER_METRICS:
+            rows.append({"spacer": True})
+            continue
+
         values = [lookup.get((m, d)) for d in dates]
         if any(v is not None for v in values):
             row = {
@@ -492,18 +585,29 @@ def pivot_fiscal_items(items, exceptional_breakdown=None):
                     row["breakdown"].append(brow)
             rows.append(row)
 
+            # Add spacer after total equity (only once)
+            if m in FISCAL_BS_SPACER_AFTER and not equity_spacer_added:
+                rows.append({"spacer": True})
+                equity_spacer_added = True
+
     dates = [d.strftime("%b %Y") for d in dates]
     return {"dates": dates, "rows": rows}
 
 
-def pivot_items(items, metrics=None):
+def pivot_items(items, metrics=None, combine=None, rename=None):
     """
     Pivot financial items into a table format.
     items: [(metric, date, value), ...]
-    metrics: list of metrics to show in order, or None to show all available
+    metrics: list of metrics to show in order, or None to show all available.
+             Use None entries for spacer rows.
+    combine: dict mapping display_name -> [db_metric, ...] to sum multiple DB metrics
+    rename: dict mapping display_name -> db_metric for renamed metrics
     """
     if not items:
         return {"dates": [], "rows": []}
+
+    combine = combine or {}
+    rename = rename or {}
 
     dates = sorted({d for _, d, _ in items}, reverse=True)
     lookup = {(m, d): v for m, d, v in items}
@@ -519,8 +623,26 @@ def pivot_items(items, metrics=None):
 
     rows = []
     for m in metrics:
-        # Only include metrics that have at least one value
-        values = [lookup.get((m, d)) for d in dates]
+        if m is None:
+            rows.append({"spacer": True})
+            continue
+
+        if m in combine:
+            # Combined metric: sum values from multiple source metrics
+            values = []
+            for d in dates:
+                total = None
+                for source in combine[m]:
+                    v = lookup.get((source, d))
+                    if v is not None:
+                        total = (total or 0) + float(v)
+                values.append(total)
+        elif m in rename:
+            # Renamed metric: look up the DB metric name
+            values = [lookup.get((rename[m], d)) for d in dates]
+        else:
+            values = [lookup.get((m, d)) for d in dates]
+
         if any(v is not None for v in values):
             rows.append({
                 "metric": m,
@@ -561,12 +683,16 @@ class CompanyDetailView(DetailView):
         if is_qfs_data(all_items):
             # Use predefined QFS metric order
             ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
-            ctx["BS_table"] = pivot_items(buckets["BS"], METRICS_BS)
+            ctx["BS_table"] = pivot_items(
+                buckets["BS"], METRICS_BS,
+                combine=QFS_BS_COMBINE, rename=QFS_BS_RENAME,
+            )
             ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
         else:
             # Transform Fiscal data for display (renames, drops, combines, exceptional items)
             is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
-            bs_items, _ = transform_fiscal_items(buckets["BS"])
+            bs_raw = preprocess_fiscal_bs(buckets["BS"])
+            bs_items, _ = transform_fiscal_items(bs_raw)
             cf_items, _ = transform_fiscal_items(buckets["CF"])
             ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
             ctx["BS_table"] = pivot_fiscal_items(bs_items)
@@ -883,6 +1009,56 @@ def chat_send_message(request, ticker, session_id):
         },
         "cost": {"input_tokens": input_tokens, "output_tokens": output_tokens, "usd": round(cost, 6)},
     })
+
+
+@login_required
+def chat_session_rename(request, ticker, session_id):
+    """Rename a chat session."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        session = ChatSession.objects.get(id=session_id, user=request.user, company=company)
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Chat session not found"}, status=404)
+
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        title = (data.get("title") or "").strip()
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    if not title:
+        return JsonResponse({"error": "Title is required"}, status=400)
+
+    session.title = title
+    session.save(update_fields=["title"])
+    return JsonResponse({"ok": True, "title": session.title})
+
+
+@login_required
+def chat_session_delete(request, ticker, session_id):
+    """Delete a chat session."""
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    try:
+        session = ChatSession.objects.get(id=session_id, user=request.user, company=company)
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"error": "Chat session not found"}, status=404)
+
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    session.delete()
+    return JsonResponse({"ok": True})
 
 
 def intraday_prices(request, ticker, period):

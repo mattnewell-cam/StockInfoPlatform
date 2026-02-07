@@ -704,7 +704,7 @@
 
             const endpoint = `/companies/{{ company.ticker }}/news/`;
             const pageSize = 20;
-            let allTypes = [];
+            let typeMap = {};  // type_code -> display name
             let offset = 0;
             let total = null;
 
@@ -753,23 +753,24 @@
                 }).join('');
             }
 
-            function updateTypeOptions(types, selectedValues) {
-                const uniqueTypes = Array.from(new Set(types)).sort();
-                allTypes = uniqueTypes;
-                typeFilter.innerHTML = uniqueTypes.map(value => {
-                    const id = `news-type-${value.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
-                    const checked = selectedValues.has(value) ? 'checked' : '';
+            function updateTypeOptions(newTypeMap, selectedCodes) {
+                Object.assign(typeMap, newTypeMap);
+                const codes = Object.keys(typeMap).sort((a, b) => typeMap[a].localeCompare(typeMap[b]));
+                typeFilter.innerHTML = codes.map(code => {
+                    const label = typeMap[code];
+                    const id = `news-type-${code.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+                    const checked = selectedCodes.has(code) ? 'checked' : '';
                     return `
                         <label for="${escapeHtml(id)}" class="flex items-center gap-2 text-sm text-gray-700">
-                            <input id="${escapeHtml(id)}" type="checkbox" value="${escapeHtml(value)}" ${checked}
+                            <input id="${escapeHtml(id)}" type="checkbox" value="${escapeHtml(code)}" ${checked}
                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 news-type-option">
-                            ${escapeHtml(value)}
+                            ${escapeHtml(label)}
                         </label>
                     `;
                 }).join('');
-                const allSelected = uniqueTypes.length > 0 && uniqueTypes.every(value => selectedValues.has(value));
+                const allSelected = codes.length > 0 && codes.every(code => selectedCodes.has(code));
                 typeSelectAll.checked = allSelected;
-                typeSelectAll.disabled = uniqueTypes.length === 0;
+                typeSelectAll.disabled = codes.length === 0;
             }
 
             function updatePagerState(itemCount) {
@@ -794,7 +795,7 @@
             }
 
             async function loadNews(resetOffset) {
-                const selectedValues = new Set(
+                const selectedCodes = new Set(
                     Array.from(typeFilter.querySelectorAll('input.news-type-option:checked'))
                         .map(input => input.value)
                 );
@@ -806,8 +807,8 @@
                 const url = new URL(endpoint, window.location.origin);
                 url.searchParams.set('size', String(pageSize));
                 url.searchParams.set('from', String(offset));
-                if (selectedValues.size) {
-                    url.searchParams.set('types', Array.from(selectedValues).join(','));
+                if (selectedCodes.size) {
+                    url.searchParams.set('type_codes', Array.from(selectedCodes).join(','));
                 }
 
                 try {
@@ -819,7 +820,7 @@
                     }
 
                     total = typeof data.total === 'number' ? data.total : null;
-                    updateTypeOptions(data.types || [], selectedValues);
+                    updateTypeOptions(data.type_map || {}, selectedCodes);
                     renderItems(data.items || []);
                     updateMeta((data.items || []).length);
                     updatePagerState((data.items || []).length);
@@ -1224,10 +1225,15 @@
                         return;
                     }
                     sessionList.innerHTML = data.sessions.map(session => `
-                        <button class="chat-session w-full text-left px-2 py-2 rounded-md text-sm hover:bg-gray-100 ${session.id === activeSessionId ? 'bg-gray-100 font-medium' : ''}" data-session="${session.id}">
-                            <div class="truncate">${escapeHtml(session.title || 'Untitled chat')}</div>
-                            <div class="text-[11px] text-gray-400">${escapeHtml(session.updated_at)}</div>
-                        </button>
+                        <div class="relative group">
+                            <button class="chat-session w-full text-left px-2 py-2 pr-7 rounded-md text-sm hover:bg-gray-100 ${session.id === activeSessionId ? 'bg-gray-100 font-medium' : ''}" data-session="${session.id}">
+                                <div class="truncate">${escapeHtml(session.title || 'Untitled chat')}</div>
+                                <div class="text-[11px] text-gray-400">${escapeHtml(session.updated_at)}</div>
+                            </button>
+                            <button class="chat-menu-btn absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity" data-session="${session.id}">
+                                <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg>
+                            </button>
+                        </div>
                     `).join('');
 
                     if (!activeSessionId) {
@@ -1261,6 +1267,117 @@
                 });
             }
 
+            // Context menu for chat sessions
+            let openMenu = null;
+            function closeMenu() {
+                if (openMenu) { openMenu.remove(); openMenu = null; }
+            }
+
+            function renameSession(sessionId) {
+                const wrapper = sessionList.querySelector(`.chat-session[data-session="${sessionId}"]`);
+                if (!wrapper) return;
+                const titleEl = wrapper.querySelector('.truncate');
+                if (!titleEl) return;
+                const currentTitle = titleEl.textContent.trim();
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentTitle === 'Untitled chat' ? '' : currentTitle;
+                input.className = 'w-full rounded border border-blue-400 px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500';
+                titleEl.replaceWith(input);
+                input.focus();
+                input.select();
+
+                // Hide the three-dot button while editing
+                const menuBtn = wrapper.closest('.relative').querySelector('.chat-menu-btn');
+                if (menuBtn) menuBtn.style.display = 'none';
+
+                let saved = false;
+                async function save() {
+                    if (saved) return;
+                    saved = true;
+                    const newTitle = input.value.trim();
+                    if (!newTitle || newTitle === currentTitle) {
+                        // Revert
+                        const span = document.createElement('div');
+                        span.className = 'truncate';
+                        span.textContent = currentTitle;
+                        input.replaceWith(span);
+                        if (menuBtn) menuBtn.style.display = '';
+                        return;
+                    }
+                    const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/rename/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    if (response.ok) {
+                        if (String(activeSessionId) === String(sessionId)) {
+                            sessionTitle.textContent = newTitle;
+                        }
+                        await loadSessions();
+                    } else {
+                        const span = document.createElement('div');
+                        span.className = 'truncate';
+                        span.textContent = currentTitle;
+                        input.replaceWith(span);
+                        if (menuBtn) menuBtn.style.display = '';
+                    }
+                }
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); save(); }
+                    if (e.key === 'Escape') { saved = true; const span = document.createElement('div'); span.className = 'truncate'; span.textContent = currentTitle; input.replaceWith(span); if (menuBtn) menuBtn.style.display = ''; }
+                });
+                input.addEventListener('blur', save);
+            }
+
+            async function deleteSession(sessionId) {
+                if (!confirm('Delete this chat? This cannot be undone.')) return;
+                const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/delete/`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                });
+                if (response.ok) {
+                    if (String(activeSessionId) === String(sessionId)) {
+                        activeSessionId = null;
+                        messagesEl.innerHTML = '';
+                        sessionTitle.textContent = 'Select a chat to begin.';
+                    }
+                    await loadSessions();
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to delete chat.');
+                }
+            }
+
+            sessionList.addEventListener('click', (event) => {
+                const menuBtn = event.target.closest('.chat-menu-btn');
+                if (menuBtn) {
+                    event.stopPropagation();
+                    closeMenu();
+                    const sessionId = menuBtn.dataset.session;
+                    const rect = menuBtn.getBoundingClientRect();
+                    const listRect = sessionList.getBoundingClientRect();
+                    const menu = document.createElement('div');
+                    menu.className = 'absolute z-20 bg-white border border-gray-200 rounded-md shadow-lg py-1 w-32';
+                    menu.style.top = (rect.bottom - listRect.top + sessionList.scrollTop) + 'px';
+                    menu.style.right = '0px';
+                    menu.innerHTML = `
+                        <button class="chat-ctx-rename w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">Rename</button>
+                        <button class="chat-ctx-delete w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-gray-100">Delete</button>
+                    `;
+                    menu.querySelector('.chat-ctx-rename').addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); renameSession(sessionId); });
+                    menu.querySelector('.chat-ctx-delete').addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); deleteSession(sessionId); });
+                    menuBtn.closest('.relative').appendChild(menu);
+                    openMenu = menu;
+                    return;
+                }
+                closeMenu();
+            });
+
+            document.addEventListener('click', closeMenu);
+
             async function createSession() {
                 const response = await fetch(`/companies/${ticker}/chat/sessions/`, {
                     method: 'POST',
@@ -1290,6 +1407,22 @@
                     if (!created) return;
                 }
                 sendBtn.disabled = true;
+                input.value = '';
+
+                // Show user message immediately
+                messagesEl.insertAdjacentHTML('beforeend', renderMessage('user', content));
+
+                // Show thinking indicator
+                const thinkingId = 'thinking-' + Date.now();
+                messagesEl.insertAdjacentHTML('beforeend', `
+                    <div id="${thinkingId}" class="flex justify-start">
+                        <div class="max-w-[80%] rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-500 italic">
+                            Thinking...
+                        </div>
+                    </div>
+                `);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+
                 try {
                     const response = await fetch(`/companies/${ticker}/chat/sessions/${activeSessionId}/send/`, {
                         method: 'POST',
@@ -1300,23 +1433,32 @@
                         body: JSON.stringify({ content })
                     });
                     const data = await response.json();
+                    const thinkingEl = document.getElementById(thinkingId);
                     if (!response.ok) {
+                        if (thinkingEl) thinkingEl.remove();
                         alert(data.error || 'Failed to send message.');
                         return;
                     }
-                    messagesEl.insertAdjacentHTML('beforeend', renderMessage('user', data.user_message.content));
-                    messagesEl.insertAdjacentHTML('beforeend', renderMessage('assistant', data.assistant_message.content));
+                    // Replace thinking indicator with actual response
+                    if (thinkingEl) {
+                        thinkingEl.outerHTML = renderMessage('assistant', data.assistant_message.content);
+                    }
                     messagesEl.scrollTop = messagesEl.scrollHeight;
-                    input.value = '';
                     await loadSessions();
+                } catch (e) {
+                    const thinkingEl = document.getElementById(thinkingId);
+                    if (thinkingEl) thinkingEl.remove();
+                    alert('Failed to send message.');
                 } finally {
                     sendBtn.disabled = false;
                 }
             }
 
             sessionList.addEventListener('click', (event) => {
+                if (event.target.closest('.chat-menu-btn') || event.target.closest('.chat-ctx-rename') || event.target.closest('.chat-ctx-delete')) return;
                 const btn = event.target.closest('.chat-session');
                 if (!btn) return;
+                closeMenu();
                 activeSessionId = btn.dataset.session;
                 loadMessages(activeSessionId);
             });

@@ -102,6 +102,40 @@ DEV_MSGS = {
         - Details to include: a concise description of the event/item; any relevant quantification (£/%/shares etc.); the relevant dates; any non-obvious details or potential impacts
         - Clearly label what is confirmed vs. reported by third parties; do not turn rumours into facts.
         """,
+    "special_sits_qc":
+        """
+        You are a strict editorial quality-control agent. You will receive a draft special-situations report about a company.
+
+        YOUR ONLY JOB: Remove content that does not belong. You may lightly re-word surrounding text so the result reads naturally after removals, but you must NOT add new information, facts, analysis, or commentary. If everything in the draft is compliant, return it unchanged.
+
+        PERMITTED TOPICS — an item may ONLY stay if it fits one of these categories AND meets materiality:
+        (a) Takeover / strategic interest (offers, approaches, large strategic stakes, "strategic review" / "exploring options", press rumours clearly flagged)
+        (b) Major disposals / breakups (spin-offs, demergers, sale of a major division, reverse takeover)
+        (c) Large insider dealings (> £100k AND > 0.5% of shares outstanding)
+        (d) Major buybacks / tender offers / special returns (> 10% of S/O or market cap)
+        (e) Delisting / liquidation / wind-down
+        (f) Major litigation / regulatory action (material fines, investigations, injunctions)
+        (g) Going concern / solvency red flags (going concern warnings, covenant breaches, liquidity crises)
+        (h) Governance / gatekeeper disruptions (auditor/NOMAD/broker resignations, qualified audits, abrupt unexplained CEO/CFO departure)
+        (i) Material related-party transactions
+        (j) Significant capital structure events (highly dilutive equity/debt issuance, rescue financings — NOT routine refinancings or minor option grants)
+        (k) Accounting restatements (material restatements — NOT routine accounting policy changes)
+        (l) Transformational M&A (acquisitions/mergers at least 20% of market cap)
+        (m) Other genuinely extraordinary events (e.g. sudden CEO death, major fire/act of god, major product recall) — this is NOT a catch-all
+
+        REMOVE any content that:
+        1. Does not fit categories (a)-(m) above. This includes but is not limited to: normal financial results, revenue/profit updates, trading updates, earnings beats/misses, contract wins, new partnerships, product launches, expansion plans, strategy commentary, dividend declarations (unless special and > 10% of market cap), routine board appointments, AGM dates, results dates, analyst forecasts.
+        2. Fits a category but is below materiality thresholds (e.g. small insider trades, minor buybacks, routine refinancings, small related-party deals).
+        3. Enumerates categories that do not apply (e.g. "No takeover approaches were identified..."). Non-events must be silently omitted, not listed.
+        4. Contains sign-off offers like "If you'd like, I can...", "Would you like me to...", "I can drill into...", or any similar conversational padding.
+        5. Contains "Notes" or "Context" sections that merely restate what was NOT found or offer to do more work.
+        6. Contains framing headers like "Material items (last 12 months or upcoming)" — jump straight into the items.
+
+        BE AGGRESSIVE. When in doubt, remove. It is far better to strip something borderline than to leave noise in.
+
+        If after removals nothing material remains, return exactly:
+        "No decision-relevant special-situation items found in the last 12 months."
+        """,
     "writeups":
         """
         TASK:
@@ -168,10 +202,9 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
         name = f"The company with the ticker LSE:{ticker}"
 
     try:
-        response = client.responses.create(
+        kwargs = dict(
             model=model,
             tools=[{"type": "web_search"}],
-            reasoning={"effort": effort},
             input=[
                 {
                     "role": "developer",
@@ -181,7 +214,11 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
                     "role": "user",
                     "content": PROMPT + name
                 }
-            ]
+            ],
+        )
+        if effort:
+            kwargs["reasoning"] = {"effort": effort}
+        response = client.responses.create(**kwargs
         )
 
         # Calculate and print cost
@@ -204,6 +241,34 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
     except Exception as e:
         print(f"GPT call failed for {ticker} ({category}).\nCause: {e}")
         return None
+
+
+def qc_special_sits(raw_text, model="gpt-5-nano"):
+    """Run a QC pass on a special_sits response to strip padding and enforce materiality rules."""
+    client = OpenAI(api_key=API_KEY)
+    try:
+        response = client.responses.create(
+            model=model,
+            input=[
+                {
+                    "role": "developer",
+                    "content": DEV_MSGS["special_sits_qc"]
+                },
+                {
+                    "role": "user",
+                    "content": raw_text
+                }
+            ]
+        )
+        usage = response.usage
+        if usage:
+            input_tokens = usage.input_tokens or 0
+            output_tokens = usage.output_tokens or 0
+            print(f"  QC pass — Tokens: {input_tokens} in / {output_tokens} out")
+        return response.output_text
+    except Exception as e:
+        print(f"QC pass failed, using raw text. Cause: {e}")
+        return raw_text
 
 
 def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
@@ -246,6 +311,10 @@ def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, mode
 
         print(f"Generating {category} for {ticker}...")
         result = ask_gpt(category, ticker, model=model, effort=effort)
+
+        if result is not None and category == "special_sits":
+            print(f"Running QC pass on {category} for {ticker}...")
+            result = qc_special_sits(result, model=model)
 
         if result is not None:
             # For writeups, parse the list from the response
