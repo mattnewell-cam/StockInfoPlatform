@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 import sys
 import csv
+import ast
 from pathlib import Path
 import yfinance as yf
 
@@ -93,7 +94,7 @@ DEV_MSGS = {
         - Search widely and creatively. Pull at small threads. Do searches that might turn up unexpected things, like "[CEO name] scandal" or "[Company] whistleblower"
         - Before finalising your answer, carefully consider the item(s) - are they GENUINELY big and decision-relevant? If not, discard.
         - If none of (a)-(k) apply, output nothing beyond a brief statement like: "No decision-relevant special-situation items found in the last 12 months."
-        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events. Do not state "omit". Your direct response to this prompt will be displayed to users. Simply ignore all that do not apply. 
+        - DO NOT state "(x) does not apply" for each category. Do not enumerate non-events. Do not state "omit". Your direct response to this prompt will be displayed to users. Simply ignore all that do not apply.
         - DO NOT pad output with routine results, normal trading updates, small contracts, minor dividends, standard refinancing, routine board changes, or generic "strategy" commentary.
 
         EVIDENCE AND SOURCE BEHAVIOUR
@@ -159,8 +160,17 @@ PROMPT = "Follow the instructions given. Company: "
 API_KEY = os.getenv("OPENAI_API_KEY")
 CATEGORIES = ["description", "special_sits", "writeups"]
 
-
 BASE_DIR = Path(__file__).resolve().parent
+
+PRICING = {
+    "gpt-5.2": {"input": 2.50, "output": 10.00},
+    "gpt-5": {"input": 1.25, "output": 10.00},
+    "gpt-5-mini": {"input": 0.25, "output": 2.00},
+    "gpt-5-nano": {"input": 0.05, "output": 0.40},
+    "gpt-4.1": {"input": 2.00, "output": 8.00},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+}
 
 
 def ensure_django():
@@ -187,8 +197,13 @@ def get_company(ticker):
         return None
 
 
-def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
-    """Call OpenAI API to generate a summary for the given category and ticker."""
+def estimate_cost(model, input_tokens, output_tokens):
+    rates = PRICING.get(model, {"input": 2.50, "output": 10.00})
+    return (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+
+
+def ask_gpt(category, ticker, model="gpt-5-mini", effort="medium"):
+    """Call OpenAI API to generate a summary for the given category."""
     client = OpenAI(api_key=API_KEY)
 
     dev_msg = DEV_MSGS[category]
@@ -197,8 +212,7 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
         yf_ticker = yf.Ticker(f"{ticker}.L")
         info = yf_ticker.get_info()
         name = info["longName"]
-    except Exception as e:
-        print(e)
+    except Exception:
         name = f"The company with the ticker LSE:{ticker}"
 
     try:
@@ -218,29 +232,25 @@ def ask_gpt(category, ticker, model="gpt-5.2", effort="high"):
         )
         if effort:
             kwargs["reasoning"] = {"effort": effort}
-        response = client.responses.create(**kwargs
-        )
 
-        # Calculate and print cost
+        response = client.responses.create(**kwargs)
+
         usage = response.usage
-        if usage:
-            input_tokens = usage.input_tokens or 0
-            output_tokens = usage.output_tokens or 0
-            pricing = {
-                "gpt-5.2": {"input": 2.50, "output": 10.00},
-                "gpt-5-mini": {"input": 0.30, "output": 1.20},
-                "gpt-4o": {"input": 2.50, "output": 10.00},
-                "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-            }
-            rates = pricing.get(model, {"input": 2.50, "output": 10.00})
-            cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
-            print(f"  Tokens: {input_tokens} in / {output_tokens} out | Cost: ${cost:.6f}")
+        input_tokens = usage.input_tokens if usage else 0
+        output_tokens = usage.output_tokens if usage else 0
+        cost = estimate_cost(model, input_tokens, output_tokens)
+        print(f"  Tokens: {input_tokens} in / {output_tokens} out | Cost: ${cost:.6f}")
 
-        return response.output_text
+        return response.output_text, {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost,
+            "model": model,
+        }
 
     except Exception as e:
         print(f"GPT call failed for {ticker} ({category}).\nCause: {e}")
-        return None
+        return None, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0, "model": model}
 
 
 def qc_special_sits(raw_text, model="gpt-5-nano"):
@@ -261,108 +271,123 @@ def qc_special_sits(raw_text, model="gpt-5-nano"):
             ]
         )
         usage = response.usage
-        if usage:
-            input_tokens = usage.input_tokens or 0
-            output_tokens = usage.output_tokens or 0
-            print(f"  QC pass — Tokens: {input_tokens} in / {output_tokens} out")
-        return response.output_text
+        input_tokens = usage.input_tokens if usage else 0
+        output_tokens = usage.output_tokens if usage else 0
+        cost = estimate_cost(model, input_tokens, output_tokens)
+        print(f"  QC pass — Tokens: {input_tokens} in / {output_tokens} out | Cost: ${cost:.6f}")
+        return response.output_text, {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost,
+            "model": model,
+        }
     except Exception as e:
         print(f"QC pass failed, using raw text. Cause: {e}")
-        return raw_text
+        return raw_text, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0, "model": model}
 
 
-def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
-    """
-    Generate AI summaries for a single ticker and save to the DB.
-
-    Args:
-        ticker: Stock ticker symbol (e.g., "LLOY")
-        categories: List of categories to generate. Defaults to all categories.
-        overwrite: If False, skip categories that already exist in cache.
-                   If True, regenerate and replace existing summaries.
-        model: OpenAI model to use.
-        effort: Reasoning effort level (low, medium, high).
-
-    Returns:
-        dict: The updated summaries for this ticker.
-    """
+def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5-mini", effort="medium"):
     if categories is None:
         categories = CATEGORIES
 
     company = get_company(ticker)
     if not company:
         print(f"{ticker} not found in DB. Skipping.")
-        return {}
+        return {}, 0.0
 
     updated = {}
+    total_cost = 0.0
+
     for category in categories:
-        if category == "description":
-            if not overwrite and company.description:
-                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
-                continue
-        elif category == "special_sits":
-            if not overwrite and company.special_sits:
-                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
-                continue
-        elif category == "writeups":
-            if not overwrite and company.writeups:
-                print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
-                continue
+        if category == "description" and not overwrite and company.description:
+            print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+            continue
+        if category == "special_sits" and not overwrite and company.special_sits:
+            print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+            continue
+        if category == "writeups" and not overwrite and company.writeups:
+            print(f"Skipping {ticker} - {category} (already exists, use overwrite=True to replace)")
+            continue
 
         print(f"Generating {category} for {ticker}...")
-        result = ask_gpt(category, ticker, model=model, effort=effort)
+        result, meta = ask_gpt(category, ticker, model=model, effort=effort)
+        total_cost += meta["cost"]
 
         if result is not None and category == "special_sits":
             print(f"Running QC pass on {category} for {ticker}...")
-            result = qc_special_sits(result, model=model)
+            result, qc_meta = qc_special_sits(result, model="gpt-5-nano")
+            total_cost += qc_meta["cost"]
 
-        if result is not None:
-            # For writeups, parse the list from the response
-            if category == "writeups":
-                try:
-                    # Try to parse as Python list
-                    parsed = eval(result)
-                    if isinstance(parsed, list):
-                        result = parsed
-                    else:
-                        result = []
-                except:
-                    # If parsing fails, store empty list
-                    print(f"Warning: Could not parse writeups response for {ticker}")
-                    result = []
-
-            if category == "description":
-                company.description = result
-            elif category == "special_sits":
-                company.special_sits = result
-            elif category == "writeups":
-                company.writeups = result
-
-            company.save(update_fields=[category])
-            updated[category] = result
-            print(f"Saved {category} for {ticker}")
-        else:
+        if result is None:
             print(f"Failed to generate {category} for {ticker}")
+            continue
 
-    return updated
+        if category == "writeups":
+            try:
+                parsed = ast.literal_eval(result)
+                result = parsed if isinstance(parsed, list) else []
+            except Exception:
+                print(f"Warning: Could not parse writeups response for {ticker}")
+                result = []
+
+        if category == "description":
+            company.description = result
+        elif category == "special_sits":
+            company.special_sits = result
+        elif category == "writeups":
+            company.writeups = result
+
+        company.save(update_fields=[category])
+        updated[category] = result
+        print(f"Saved {category} for {ticker}")
+
+    return updated, total_cost
 
 
-def generate_summaries_for_tickers(tickers, categories=None, overwrite=False, model="gpt-5.2", effort="high"):
-    """
-    Generate AI summaries for multiple tickers.
+def generate_summaries_for_tickers(
+    tickers,
+    categories=None,
+    overwrite=False,
+    model="gpt-5-mini",
+    effort="medium",
+    budget_usd=None,
+    reserve_usd=0.0,
+):
+    if categories is None:
+        categories = CATEGORIES
 
-    Args:
-        tickers: List of ticker symbols.
-        categories: List of categories to generate. Defaults to all categories.
-        overwrite: If False, skip categories that already exist in cache.
-        model: OpenAI model to use.
-        effort: Reasoning effort level (low, medium, high).
-    """
+    spent = 0.0
+    processed = 0
+
+    if budget_usd is not None:
+        print(f"Budget cap enabled: ${budget_usd:.2f} (reserve: ${reserve_usd:.2f})")
+
     for ticker in tickers:
-        print(f"\n{'='*50}")
+        if budget_usd is not None and spent >= max(0.0, budget_usd - reserve_usd):
+            print("\nBUDGET STOP: reached cap threshold. Halting further generations.")
+            break
+
+        print(f"\n{'=' * 50}")
         print(f"Processing {ticker}")
-        print('='*50)
-        generate_summaries_for_ticker(ticker, categories, overwrite, model, effort)
+        print('=' * 50)
+
+        _, ticker_cost = generate_summaries_for_ticker(
+            ticker,
+            categories=categories,
+            overwrite=overwrite,
+            model=model,
+            effort=effort,
+        )
+        spent += ticker_cost
+        processed += 1
+        print(f"Running total cost: ${spent:.6f} after {processed} tickers")
+
+        if budget_usd is not None and spent >= budget_usd:
+            print("\nBUDGET STOP: hard cap reached/exceeded on last processed ticker.")
+            break
+
+    print(f"\nDone. Processed: {processed} | Total estimated spend: ${spent:.6f}")
+    return spent
 
 
 def load_tickers_from_csv(csv_path=None):
@@ -371,38 +396,15 @@ def load_tickers_from_csv(csv_path=None):
         csv_path = str((BASE_DIR / ".." / "tickers.csv").resolve())
 
     with open(csv_path) as f:
-        return [row[0] for row in csv.reader(f)]
-
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-#
-# Generate all summaries for a single ticker (skips if existing ticker + category combo exists in cache):
-#     generate_summaries_for_ticker("LLOY")
-#
-# Generate only description for a ticker (ditto):
-#     generate_summaries_for_ticker("LLOY", categories=["description"])
-#
-# Overwrite existing summaries:
-#     generate_summaries_for_ticker("LLOY", overwrite=True)
-#
-# Generate for all tickers in tickers.csv:
-#     tickers = load_tickers_from_csv()
-#     generate_summaries_for_tickers(tickers)
-#
-# Generate for specific tickers:
-#     generate_summaries_for_tickers(["LLOY", "BARC", "HSBA"])
-#
-# ============================================================================
+        return [row[0] for row in csv.reader(f) if row]
 
 
 if __name__ == "__main__":
-
     tickers = load_tickers_from_csv()
-    generate_summaries_for_tickers(tickers, overwrite=False, model="gpt-4.1")
-
-    # Test run for a single ticker:
-    # generate_summaries_for_ticker("LLOY", overwrite=False, model="gpt-4.1")
-
-    pass
+    generate_summaries_for_tickers(
+        tickers,
+        overwrite=False,
+        model="gpt-5-mini",
+        effort="medium",
+        budget_usd=None,
+    )
