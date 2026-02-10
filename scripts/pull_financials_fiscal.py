@@ -10,6 +10,8 @@ from threading import Lock
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -57,39 +59,161 @@ def safe_click(driver, element):
         driver.execute_script("arguments[0].click();", element)
 
 
-def set_slider_range(driver, min_val=5, max_val=22, key_delay=0.02):
-    """Adjust the Mantine range slider thumbs to expand year range."""
-    thumbs = driver.find_elements(By.CSS_SELECTOR, ".mantine-Slider-thumb")
-    if len(thumbs) < 2:
-        print(f"Expected 2 slider thumbs, found {len(thumbs)}")
+def _scroll_into_safe_viewport(driver, element):
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        const rect = el.getBoundingClientRect();
+        const targetY = window.scrollY + rect.top - Math.max(160, window.innerHeight * 0.25);
+        window.scrollTo({top: Math.max(0, targetY), behavior: 'instant'});
+        """,
+        element,
+    )
+    time.sleep(0.12)
+
+
+def _take_slider_debug(driver, label):
+    try:
+        out_dir = (BASE_DIR / ".." / "tmp" / "slider_debug").resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = int(time.time() * 1000)
+        path = out_dir / f"{label}_{ts}.png"
+        driver.save_screenshot(str(path))
+        print(f"[slider] debug screenshot: {path}")
+    except Exception as exc:
+        print(f"[slider] screenshot failed: {exc}")
+
+
+def _wait_slider_unobstructed(driver, thumb, timeout=4):
+    def _ok(_):
+        return driver.execute_script(
+            """
+            const thumb = arguments[0];
+            if (!thumb) return false;
+            const r = thumb.getBoundingClientRect();
+            const x = r.left + r.width / 2;
+            const y = r.top + r.height / 2;
+            const top = document.elementFromPoint(x, y);
+            return !!top && (top === thumb || thumb.contains(top));
+            """,
+            thumb,
+        )
+
+    try:
+        WebDriverWait(driver, timeout).until(_ok)
+        return True
+    except Exception:
         return False
 
-    from selenium.webdriver.common.keys import Keys
 
-    # First thumb (left) - set to min_val
-    left_thumb = thumbs[0]
-    current_left = int(left_thumb.get_attribute("aria-valuenow"))
-    left_thumb.click()
-    time.sleep(0.1)
-    # Move left (decrease value)
-    for _ in range(current_left - min_val):
-        left_thumb.send_keys(Keys.ARROW_LEFT)
-        time.sleep(key_delay)
-    print(f"Set left thumb from {current_left} to {min_val}")
+def _set_thumb_to_value(driver, thumb, target_val, is_left_thumb, key_delay=0.02):
+    _scroll_into_safe_viewport(driver, thumb)
 
-    # Second thumb (right) - set to max_val
-    right_thumb = thumbs[1]
-    current_right = int(right_thumb.get_attribute("aria-valuenow"))
-    right_thumb.click()
-    time.sleep(0.1)
-    # Move right (increase value)
-    for _ in range(max_val - current_right):
-        right_thumb.send_keys(Keys.ARROW_RIGHT)
-        time.sleep(key_delay)
-    print(f"Set right thumb from {current_right} to {max_val}")
+    if not _wait_slider_unobstructed(driver, thumb, timeout=2):
+        print("[slider] thumb appears obstructed before interaction; attempting anyway")
 
-    time.sleep(0.2)
-    return True
+    current_val = int(thumb.get_attribute("aria-valuenow"))
+    if current_val == target_val:
+        return True
+
+    # Attempt 1: focus + keyboard steps (most reliable when focus lands correctly)
+    try:
+        driver.execute_script("arguments[0].focus();", thumb)
+        safe_click(driver, thumb)
+        key = Keys.ARROW_LEFT if target_val < current_val else Keys.ARROW_RIGHT
+        for _ in range(abs(target_val - current_val)):
+            thumb.send_keys(key)
+            time.sleep(key_delay)
+        if int(thumb.get_attribute("aria-valuenow")) == target_val:
+            return True
+    except Exception as exc:
+        print(f"[slider] keyboard adjustment failed: {exc}")
+
+    # Attempt 2: drag the thumb by x-offset
+    try:
+        min_v = int(thumb.get_attribute("aria-valuemin") or "0")
+        max_v = int(thumb.get_attribute("aria-valuemax") or "100")
+        slider = driver.execute_script(
+            "return arguments[0].closest('[class*=\"Slider-root\"], [class*=\"Slider-trackContainer\"], [class*=\"Slider-track\"]')",
+            thumb,
+        )
+        width = driver.execute_script("return arguments[0].getBoundingClientRect().width", slider) if slider else 0
+        value_span = max(max_v - min_v, 1)
+        px_per_unit = (width / value_span) if width else 6
+        delta = target_val - int(thumb.get_attribute("aria-valuenow"))
+        x_offset = int(delta * px_per_unit)
+        ActionChains(driver).move_to_element(thumb).click_and_hold(thumb).move_by_offset(x_offset, 0).release().perform()
+        time.sleep(0.12)
+        if int(thumb.get_attribute("aria-valuenow")) == target_val:
+            return True
+    except Exception as exc:
+        print(f"[slider] drag adjustment failed: {exc}")
+
+    # Attempt 3: direct JS aria + events fallback
+    try:
+        driver.execute_script(
+            """
+            const thumb = arguments[0], target = String(arguments[1]);
+            thumb.setAttribute('aria-valuenow', target);
+            const ev1 = new Event('input', { bubbles: true });
+            const ev2 = new Event('change', { bubbles: true });
+            thumb.dispatchEvent(ev1);
+            thumb.dispatchEvent(ev2);
+            """,
+            thumb,
+            int(target_val),
+        )
+        time.sleep(0.12)
+        # Nudge via key so React/Mantine state reconciles from focused element
+        driver.execute_script("arguments[0].focus();", thumb)
+        if is_left_thumb:
+            thumb.send_keys(Keys.ARROW_RIGHT)
+            thumb.send_keys(Keys.ARROW_LEFT)
+        else:
+            thumb.send_keys(Keys.ARROW_LEFT)
+            thumb.send_keys(Keys.ARROW_RIGHT)
+        time.sleep(0.05)
+        if int(thumb.get_attribute("aria-valuenow")) == target_val:
+            return True
+    except Exception as exc:
+        print(f"[slider] JS fallback failed: {exc}")
+
+    return int(thumb.get_attribute("aria-valuenow")) == target_val
+
+
+def set_slider_range(driver, min_val=5, max_val=22, key_delay=0.02):
+    """Adjust Mantine range slider thumbs with robust headless-safe fallbacks."""
+    thumbs = driver.find_elements(By.CSS_SELECTOR, ".mantine-Slider-thumb")
+    if len(thumbs) < 2:
+        print(f"[slider] Expected 2 slider thumbs, found {len(thumbs)}")
+        _take_slider_debug(driver, "thumbs_missing")
+        return False
+
+    left_thumb, right_thumb = thumbs[0], thumbs[1]
+
+    left_before = int(left_thumb.get_attribute("aria-valuenow"))
+    right_before = int(right_thumb.get_attribute("aria-valuenow"))
+
+    for attempt in range(1, 4):
+        ok_left = _set_thumb_to_value(driver, left_thumb, min_val, is_left_thumb=True, key_delay=key_delay)
+        ok_right = _set_thumb_to_value(driver, right_thumb, max_val, is_left_thumb=False, key_delay=key_delay)
+
+        left_after = int(left_thumb.get_attribute("aria-valuenow"))
+        right_after = int(right_thumb.get_attribute("aria-valuenow"))
+        print(
+            f"[slider] attempt={attempt} left {left_before}->{left_after} target={min_val} "
+            f"right {right_before}->{right_after} target={max_val}"
+        )
+
+        if ok_left and ok_right and left_after == min_val and right_after == max_val:
+            time.sleep(0.2)
+            return True
+
+        _take_slider_debug(driver, f"slider_attempt_{attempt}")
+        time.sleep(0.2)
+
+    print("[slider] Failed to set desired range after retries")
+    return False
 
 
 def build_fiscal_ticker(ticker, exchange):
@@ -173,6 +297,19 @@ def open_magic_link(driver, magic_link):
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
     print(f"Navigated to magic link. Current URL: {driver.current_url}")
     time.sleep(1)
+
+
+def assert_authenticated_with_full_financials(driver):
+    """Auth gate without parking all windows on a probe ticker."""
+    driver.get(f"{URL}/dashboard")
+    wait_for(driver, By.TAG_NAME, "body", timeout=12)
+    body_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    cur = (driver.current_url or "").lower()
+
+    if any(x in cur for x in ["login", "sign-in", "auth"]) or any(
+        x in body_text for x in ["check your email", "magic link", "log in", "login with email"]
+    ):
+        raise RuntimeError("Auth check failed: worker appears logged out")
 
 
 def wait_for_table(driver, timeout=20):
@@ -410,6 +547,7 @@ def pull_financials(driver, ticker, exchange="LSE", expand_slider=True, fast_mod
                         fast_mode=fast_mode,
                     )
                     rows_by_statement[statement] = rows
+                    print(f"[{ticker}] statement {statement} captured rows={len(rows)}")
                     last_exc = None
                     break
                 except Exception as exc:
@@ -467,6 +605,11 @@ def main():
         help="Only update a specific ticker",
     )
     parser.add_argument(
+        "--magic-link",
+        default="",
+        help="Optional prefilled fiscal.ai magic link to skip interactive paste",
+    )
+    parser.add_argument(
         "--tickers-csv",
         default=DEFAULT_TICKERS_CSV,
         help="Path to CSV with tickers (default: lse_all_tickers.csv in repo root)",
@@ -512,6 +655,12 @@ def main():
         action="store_true",
         help="Disable fast mode for extra stability",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=WORKERS_DEFAULT,
+        help=f"Number of parallel browser workers (default: {WORKERS_DEFAULT})",
+    )
     args = parser.parse_args()
 
     def build_driver():
@@ -544,6 +693,7 @@ def main():
     def worker_run(worker_id, driver, tickers, cached, failed_existing, ticker_market, lock):
         failed = []
         fast_mode = args.fast and not args.no_fast
+        consecutive_full_ok = 0
         for t in tickers:
             if not t:
                 continue
@@ -585,6 +735,7 @@ def main():
                         save_cached_json(args.out_json, cached)
                     print(f"[{worker_id}] Saved supplemental data for {t} (exchange: {used_exchange})")
                 except Exception as e:
+                    consecutive_full_ok = 0
                     print(f"[{worker_id}] Failed supplemental for {t}: {e}")
                     failed.append(t)
                     with lock:
@@ -609,8 +760,16 @@ def main():
                     with lock:
                         cached[t] = financials
                         save_cached_json(args.out_json, cached)
-                    print(f"[{worker_id}] Saved cached financials for {t} (exchange: {used_exchange})")
+                    trio_ok = all(k in financials and financials[k] for k in ("IS", "BS", "CF"))
+                    row_counts = {k: len(financials.get(k, [])) for k in ("IS", "BS", "CF")}
+                    consecutive_full_ok = consecutive_full_ok + 1 if trio_ok else 0
+                    print(
+                        f"[{worker_id}] FULL_OK ticker={t} exchange={used_exchange} "
+                        f"IS={row_counts['IS']} BS={row_counts['BS']} CF={row_counts['CF']} "
+                        f"TRIO={'Y' if trio_ok else 'N'} STREAK={consecutive_full_ok}"
+                    )
                 except Exception as e:
+                    consecutive_full_ok = 0
                     print(f"[{worker_id}] Failed {t}: {e}")
                     failed.append(t)
                     with lock:
@@ -648,14 +807,18 @@ def main():
         cached = load_cached_json(args.out_json)
         failed_existing = load_failed_set(args.failed_csv)
 
-        workers = WORKERS_DEFAULT
+        workers = max(1, int(args.workers or WORKERS_DEFAULT))
         chunks = split_chunks(tickers, workers)
         if not chunks:
             print("No tickers to process.")
             return
         primary_driver = build_driver()
         drivers.append(primary_driver)
-        magic_link = start_login_flow(primary_driver)
+        if args.magic_link:
+            magic_link = args.magic_link.strip()
+            print("Using provided magic link (skipping interactive paste)")
+        else:
+            magic_link = start_login_flow(primary_driver)
 
         for _ in range(len(chunks) - 1):
             d = build_driver()
@@ -663,6 +826,7 @@ def main():
 
         for idx, d in enumerate(drivers, start=1):
             open_magic_link(d, magic_link)
+            assert_authenticated_with_full_financials(d)
             print(f"Successfully logged in (window {idx}/{len(drivers)}).")
             print(f"Current URL: {d.current_url}")
 
