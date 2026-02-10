@@ -745,12 +745,6 @@ def pivot_items(items, metrics=None, combine=None, rename=None):
     return {"dates": dates, "rows": rows}
 
 
-def is_qfs_data(items):
-    """Check if the financial data is from QuickFS (has 'Revenue' metric)."""
-    metrics = {m for m, _, _ in items}
-    return "Revenue" in metrics
-
-
 class CompanyDetailView(DetailView):
     model = Company
     template_name = "companies/company_detail.html"
@@ -769,25 +763,14 @@ class CompanyDetailView(DetailView):
         for st, m, d, v in items:
             buckets[st].append((m, d, v))
 
-        # Check if this is QFS data (has "Revenue") or Fiscal data
-        all_items = buckets["IS"] + buckets["BS"] + buckets["CF"]
-        if is_qfs_data(all_items):
-            # Use predefined QFS metric order
-            ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
-            ctx["BS_table"] = pivot_items(
-                buckets["BS"], METRICS_BS,
-                combine=QFS_BS_COMBINE, rename=QFS_BS_RENAME,
-            )
-            ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
-        else:
-            # Transform Fiscal data for display (renames, drops, combines, exceptional items)
-            is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
-            bs_raw = preprocess_fiscal_bs(buckets["BS"])
-            bs_items, _ = transform_fiscal_items(bs_raw)
-            cf_items, _ = transform_fiscal_items(buckets["CF"])
-            ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
-            ctx["BS_table"] = pivot_fiscal_items(bs_items)
-            ctx["CF_table"] = pivot_fiscal_items(cf_items)
+        # Fiscal-only pipeline: transform for display (renames, drops, combines, exceptional items)
+        is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
+        bs_raw = preprocess_fiscal_bs(buckets["BS"])
+        bs_items, _ = transform_fiscal_items(bs_raw)
+        cf_items, _ = transform_fiscal_items(buckets["CF"])
+        ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
+        ctx["BS_table"] = pivot_fiscal_items(bs_items)
+        ctx["CF_table"] = pivot_fiscal_items(cf_items)
 
         # Price data for chart
         prices = StockPrice.objects.filter(company=self.object).order_by('date')

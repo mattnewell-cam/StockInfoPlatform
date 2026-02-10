@@ -1,33 +1,38 @@
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
-import csv
-from scripts.pull_financials_qfs import save_bulk_financials
+
 
 class Command(BaseCommand):
-    help = "Fetch QuickFS financials and save directly to the database."
+    help = "Load fiscal financials from cached_financials_2.json into the database."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--tickers-csv",
-            default="ftse_100_tickers.csv",
-            help="Path to CSV with tickers (default: ftse_100_tickers.csv)",
-        )
-        parser.add_argument(
-            "--overwrite",
-            action="store_true",
-            help="Overwrite existing financials in the DB for each ticker",
+            "--file",
+            default="cached_financials_2.json",
+            help="Path to cached fiscal JSON (default: cached_financials_2.json)",
         )
         parser.add_argument(
             "--ticker",
             type=str,
-            help="Only update a specific ticker",
+            help="Only load a specific ticker",
+        )
+        parser.add_argument(
+            "--skip-create",
+            action="store_true",
+            help="Skip creating missing companies",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show what would be done without writing",
         )
 
     def handle(self, *args, **options):
-        ticker = options.get("ticker")
-        if ticker:
-            tickers = [ticker]
-        else:
-            with open(options["tickers_csv"]) as f:
-                tickers = [l[0] for l in list(csv.reader(f))]
-
-        save_bulk_financials(tickers, overwrite=options.get("overwrite", False))
+        kwargs = {
+            "file": options["file"],
+            "ticker": options.get("ticker"),
+            "skip_create": options.get("skip_create", False),
+            "dry_run": options.get("dry_run", False),
+        }
+        # Reuse the fiscal loader command directly.
+        call_command("load_cached_financials_2", **kwargs)
