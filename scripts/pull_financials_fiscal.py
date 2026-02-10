@@ -216,9 +216,20 @@ def set_slider_range(driver, min_val=5, max_val=22, key_delay=0.02):
     return False
 
 
+def normalize_exchange(exchange: str) -> str:
+    """Map our exchange codes to fiscal.ai's expected prefixes."""
+    if not exchange:
+        return exchange
+    ex = exchange.strip()
+    if ex.upper() == "NASDAQ":
+        return "NasdaqGS"
+    return ex
+
+
 def build_fiscal_ticker(ticker, exchange):
     if "-" in ticker:
         return ticker
+    exchange = normalize_exchange(exchange)
     return f"{exchange}-{ticker}"
 
 
@@ -744,7 +755,7 @@ def main():
                             try:
                                 with open(args.failed_csv, "a", newline="") as f:
                                     writer = csv.writer(f)
-                                    writer.writerow([t])
+                                    writer.writerow([t, ticker_exchange])
                             except Exception as write_exc:
                                 print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
             else:
@@ -778,7 +789,7 @@ def main():
                             try:
                                 with open(args.failed_csv, "a", newline="") as f:
                                     writer = csv.writer(f)
-                                    writer.writerow([t])
+                                    writer.writerow([t, ticker_exchange])
                             except Exception as write_exc:
                                 print(f"[{worker_id}] Failed to write {t} to {args.failed_csv}: {write_exc}")
         return failed
@@ -798,7 +809,7 @@ def main():
                     ticker = row[0].strip()
                     tickers.append(ticker)
                     if len(row) >= 2 and row[1].strip():
-                        ticker_market[ticker] = row[1].strip()
+                        ticker_market[ticker] = normalize_exchange(row[1].strip())
         elif args.ticker:
             tickers = [args.ticker]
         else:
