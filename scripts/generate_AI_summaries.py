@@ -5,6 +5,7 @@ import csv
 import ast
 from pathlib import Path
 import yfinance as yf
+from companies.utils import yfinance_symbol, normalize_exchange
 
 DEV_MSGS = {
     "description":
@@ -188,13 +189,13 @@ def ensure_django():
         django.setup()
 
 
-def get_company(ticker):
+def get_company(ticker, exchange=None):
     ensure_django()
     from companies.models import Company
-    try:
-        return Company.objects.get(ticker=ticker)
-    except Company.DoesNotExist:
-        return None
+    qs = Company.objects.filter(ticker=ticker)
+    if exchange:
+        qs = qs.filter(exchange=exchange)
+    return qs.first()
 
 
 def estimate_cost(model, input_tokens, output_tokens):
@@ -202,18 +203,19 @@ def estimate_cost(model, input_tokens, output_tokens):
     return (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
 
 
-def ask_gpt(category, ticker, model="gpt-5-mini", effort="medium"):
+def ask_gpt(category, ticker, exchange=None, model="gpt-5-mini", effort="medium"):
     """Call OpenAI API to generate a summary for the given category."""
     client = OpenAI(api_key=API_KEY)
 
     dev_msg = DEV_MSGS[category]
 
     try:
-        yf_ticker = yf.Ticker(f"{ticker}.L")
+        yf_ticker = yf.Ticker(yfinance_symbol(ticker, exchange))
         info = yf_ticker.get_info()
         name = info["longName"]
     except Exception:
-        name = f"The company with the ticker LSE:{ticker}"
+        exch = normalize_exchange(exchange) or "UNKNOWN"
+        name = f"The company with the ticker {exch}:{ticker}"
 
     try:
         kwargs = dict(
@@ -286,11 +288,11 @@ def qc_special_sits(raw_text, model="gpt-5-nano"):
         return raw_text, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0, "model": model}
 
 
-def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5-mini", effort="medium"):
+def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, model="gpt-5-mini", effort="medium", exchange=None):
     if categories is None:
         categories = CATEGORIES
 
-    company = get_company(ticker)
+    company = get_company(ticker, exchange=exchange)
     if not company:
         print(f"{ticker} not found in DB. Skipping.")
         return {}, 0.0
@@ -310,7 +312,7 @@ def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, mode
             continue
 
         print(f"Generating {category} for {ticker}...")
-        result, meta = ask_gpt(category, ticker, model=model, effort=effort)
+        result, meta = ask_gpt(category, ticker, exchange=company.exchange, model=model, effort=effort)
         total_cost += meta["cost"]
 
         if result is not None and category == "special_sits":

@@ -22,6 +22,12 @@ class Command(BaseCommand):
             help='Overwrite existing summaries in the database (default: only fill empty fields)'
         )
         parser.add_argument(
+            '--exchange',
+            type=str,
+            default=None,
+            help='Optional exchange for single-ticker runs (e.g. LSE, NMS, NYQ)'
+        )
+        parser.add_argument(
             '--tickers-csv',
             type=str,
             default=None,
@@ -61,6 +67,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         ticker_filter = options.get('ticker')
         overwrite = options.get('overwrite', False)
+        exchange = options.get('exchange')
         tickers_csv = options.get('tickers_csv')
         model = options.get('model')
         effort = options.get('effort')
@@ -82,6 +89,7 @@ class Command(BaseCommand):
                 overwrite=overwrite,
                 model=model,
                 effort=effort,
+                exchange=exchange,
             )
             self.stdout.write(self.style.SUCCESS(f"Done. Estimated spend: ${spent:.6f}"))
         else:

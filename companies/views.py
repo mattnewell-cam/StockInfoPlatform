@@ -13,7 +13,7 @@ import requests
 
 import os
 from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen
-from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql
+from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql, yfinance_symbol
 from django.db.models import Q
 from django.utils import timezone
 from django.db.models import Count, Q as DQ
@@ -1159,9 +1159,7 @@ def intraday_prices(request, ticker, period):
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
-    # Replace dots with hyphens for yfinance (e.g., BT.A -> BT-A)
-    yf_symbol = ticker.replace('.', '-')
-    yf_ticker = yf.Ticker(f"{yf_symbol}.L")
+    yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
 
     # Map period to yfinance parameters
     period_config = {

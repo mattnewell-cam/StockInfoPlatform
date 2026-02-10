@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company
+from companies.utils import yfinance_symbol
 import csv
 import yfinance as yf
 from datetime import datetime, timezone
@@ -37,7 +38,8 @@ class Command(BaseCommand):
                 continue
 
             try:
-                yf_ticker = yf.Ticker(f"{t}.L")
+                # CSV is raw ticker; default to LSE mapping for legacy file
+                yf_ticker = yf.Ticker(yfinance_symbol(t, "LSE"))
                 info = yf_ticker.get_info()
 
                 name = info.get("longName") or info.get("shortName") or t
