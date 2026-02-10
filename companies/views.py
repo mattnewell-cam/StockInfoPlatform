@@ -7,12 +7,13 @@ from django.contrib.auth.models import User
 from django.contrib.auth import login, logout as auth_logout
 from django.contrib import messages
 from collections import defaultdict
+import csv
 import json
 import yfinance as yf
 import requests
 
 import os
-from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen
+from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen, Follow, AlertPreference, Notification
 from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql, yfinance_symbol
 from django.db.models import Q
 from django.utils import timezone
@@ -122,6 +123,149 @@ def search_api(request):
         return JsonResponse([], safe=False)
     results = Company.objects.filter(Q(name__icontains=q) | Q(ticker__icontains=q))[:10]
     return JsonResponse([{'ticker': c.ticker, 'name': c.name} for c in results], safe=False)
+
+
+def _load_alert_type_names():
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    csv_path = os.path.join(base_dir, "alert_types.csv")
+    names = []
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if not row:
+                    continue
+                value = (row[0] or "").strip()
+                if value and value.lower() != "always know":
+                    names.append(value)
+    except Exception:
+        return []
+    return names
+
+
+@login_required
+@require_POST
+def follow_company(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    follow, created = Follow.objects.get_or_create(user=request.user, company=company)
+
+    if created:
+        Notification.objects.create(
+            user=request.user,
+            company=company,
+            kind="follow",
+            title=f"Following {company.ticker}",
+            body=f"You'll receive alerts for {company.name or company.ticker} once rules are enabled.",
+            payload={"ticker": company.ticker},
+        )
+
+    return JsonResponse({"ok": True, "following": True})
+
+
+@login_required
+@require_POST
+def unfollow_company(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    Follow.objects.filter(user=request.user, company=company).delete()
+    AlertPreference.objects.filter(user=request.user, company=company).delete()
+    return JsonResponse({"ok": True, "following": False})
+
+
+@login_required
+def notification_list(request):
+    limit = min(max(int(request.GET.get("limit", 50)), 1), 200)
+    qs = Notification.objects.filter(user=request.user).select_related("company")[:limit]
+    unread_count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+    return JsonResponse({
+        "unread_count": unread_count,
+        "notifications": [
+            {
+                "id": n.id,
+                "kind": n.kind,
+                "title": n.title,
+                "body": n.body,
+                "ticker": n.company.ticker if n.company else "",
+                "read": n.read_at is not None,
+                "created_at": n.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            for n in qs
+        ],
+    })
+
+
+@login_required
+@require_POST
+def notification_mark_read(request, notification_id):
+    try:
+        n = Notification.objects.get(id=notification_id, user=request.user)
+    except Notification.DoesNotExist:
+        return JsonResponse({"error": "Notification not found"}, status=404)
+
+    if n.read_at is None:
+        n.read_at = timezone.now()
+        n.save(update_fields=["read_at"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def alert_preferences(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    if request.method == "GET":
+        prefs = AlertPreference.objects.filter(user=request.user, company=company).order_by("alert_type")
+        return JsonResponse({
+            "ticker": company.ticker,
+            "available_types": _load_alert_type_names(),
+            "preferences": [
+                {
+                    "id": p.id,
+                    "alert_type": p.alert_type,
+                    "enabled": p.enabled,
+                    "in_app": p.in_app,
+                    "email": p.email,
+                }
+                for p in prefs
+            ],
+        })
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        entries = data.get("preferences", [])
+        if not isinstance(entries, list):
+            return JsonResponse({"error": "preferences must be a list"}, status=400)
+
+        for entry in entries:
+            alert_type = (entry.get("alert_type") or "").strip()
+            if not alert_type:
+                continue
+            pref, _ = AlertPreference.objects.get_or_create(
+                user=request.user,
+                company=company,
+                alert_type=alert_type,
+            )
+            pref.enabled = bool(entry.get("enabled", True))
+            pref.in_app = bool(entry.get("in_app", True))
+            pref.email = bool(entry.get("email", False))
+            pref.save(update_fields=["enabled", "in_app", "email", "updated_at"])
+
+        return JsonResponse({"ok": True})
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 def newsfeed_api(request):

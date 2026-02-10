@@ -1,13 +1,22 @@
+import json
 from datetime import date
+from io import StringIO
+from tempfile import NamedTemporaryFile
 from unittest.mock import patch
 
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.management import call_command
 from django.test import RequestFactory, TestCase
 
-from companies.models import Company, Financial
+from companies.models import Company, Financial, Follow, Notification
 from companies.utils import normalize_exchange, yfinance_symbol
-from companies.views import CompanyDetailView
+from companies.views import (
+    CompanyDetailView,
+    follow_company,
+    unfollow_company,
+    notification_list,
+    notification_mark_read,
+)
 
 
 class SymbolMappingTests(TestCase):
@@ -93,3 +102,72 @@ class SaveCachedFinancialsCommandTests(TestCase):
             skip_create=True,
             dry_run=True,
         )
+
+
+class AddCompaniesByCsvTests(TestCase):
+    @patch("companies.management.commands.add_companies_by_csv.yf.Ticker")
+    def test_add_companies_accepts_exchange_column(self, mock_ticker_cls):
+        class DummyTicker:
+            def get_info(self):
+                return {
+                    "longName": "Acme Inc",
+                    "currency": "USD",
+                    "sector": "Technology",
+                    "industry": "Software",
+                    "country": "United States",
+                    "marketCap": 123,
+                    "sharesOutstanding": 456,
+                    "lastFiscalYearEnd": None,
+                }
+
+        mock_ticker_cls.return_value = DummyTicker()
+
+        with NamedTemporaryFile("w+", newline="", suffix=".csv") as f:
+            f.write("AAPL,NMS\n")
+            f.flush()
+            call_command("add_companies_by_csv", "--tickers-csv", f.name)
+
+        self.assertTrue(Company.objects.filter(ticker="AAPL", exchange="NMS").exists())
+
+
+class NotificationFlowTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="u1", password="pw")
+        self.company = Company.objects.create(ticker="ABCD", exchange="LSE", name="ABCD plc")
+        self.factory = RequestFactory()
+
+    def test_follow_unfollow_endpoints(self):
+        req1 = self.factory.post(f"/companies/{self.company.ticker}/follow/")
+        req1.user = self.user
+        r1 = follow_company(req1, ticker=self.company.ticker)
+        self.assertEqual(r1.status_code, 200)
+        self.assertTrue(Follow.objects.filter(user=self.user, company=self.company).exists())
+
+        req2 = self.factory.post(f"/companies/{self.company.ticker}/unfollow/")
+        req2.user = self.user
+        r2 = unfollow_company(req2, ticker=self.company.ticker)
+        self.assertEqual(r2.status_code, 200)
+        self.assertFalse(Follow.objects.filter(user=self.user, company=self.company).exists())
+
+    def test_notifications_list_and_mark_read(self):
+        n = Notification.objects.create(
+            user=self.user,
+            company=self.company,
+            kind="system",
+            title="Hello",
+            body="World",
+        )
+
+        req_list = self.factory.get("/companies/notifications/")
+        req_list.user = self.user
+        res = notification_list(req_list)
+        self.assertEqual(res.status_code, 200)
+        payload = json.loads(res.content)
+        self.assertEqual(payload["unread_count"], 1)
+
+        req_read = self.factory.post(f"/companies/notifications/{n.id}/read/")
+        req_read.user = self.user
+        res2 = notification_mark_read(req_read, notification_id=n.id)
+        self.assertEqual(res2.status_code, 200)
+        n.refresh_from_db()
+        self.assertIsNotNone(n.read_at)
