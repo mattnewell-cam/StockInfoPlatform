@@ -1,22 +1,102 @@
 # StockInfoPlatform
 
-Django-based platform for collecting company metadata + financial statements and (optionally) storing them in a database.
+A Django web app for building and browsing a lightweight “tearsheet” on public companies: profiles, prices, financial statements, notes, screening, alerts/notifications, and lightweight discussion + chat tied to a company.
 
-This repo currently focuses on **pulling annual fiscal statements from fiscal.ai** for a target universe (e.g. S\&P 500) and caching results to JSON, then later importing/saving to the DB.
+This repo includes both the **web application** and a set of **data/AI scripts** that help populate/enrich the database.
 
 ---
 
-## Quick start
+## What’s in here (high level)
 
-### 1) Create / activate venv
+### Web app (Django)
+
+Core features implemented in the `companies` app:
+
+- **Company pages**: search + detail pages for each company
+- **Financial statements storage**: normalized `Financial` rows (IS/BS/CF metrics by period end date)
+- **Price history**: daily OHLCV stored in `StockPrice` (data source: `yfinance`)
+- **Notes**: per-user notes on a company + a “notes home”
+- **Screener**:
+  - UI at `/screener/`
+  - Can run saved screens
+  - Generates SQL from natural language using **OpenAI** (guard-railed + validated)
+- **Follow + alerts + notifications**:
+  - Follow/unfollow a company
+  - Alert preferences per company
+  - In-app notifications API
+- **Company discussion threads**: threads + messages per company
+- **Company chat**: chat sessions + messages per company (stored in DB)
+
+Anti-crawler controls:
+- `robots.txt` is served by the app
+- Middleware blocks known AI crawler user agents with a 403 unless a `bot_key` is provided
+
+### Data + AI scripts
+
+Scripts in `/scripts` support populating/enriching the DB and caches:
+
+- `scripts/pull_financials_fiscal.py` — scrape statements from fiscal.ai into a JSON cache (and optionally later save to DB)
+- `scripts/generate_AI_summaries.py` — uses OpenAI + web search to generate:
+  - plain-English company description
+  - “special situations” summary (material items only)
+  - links to third-party writeups
+- `scripts/compare_gpt5_costs.py` — model cost comparison utility
+
+---
+
+## Project layout
+
+- `config/` — Django project config (settings/urls/wsgi/asgi)
+- `companies/` — main Django app (models, views, templates)
+- `scripts/` — standalone scripts (scraping / AI enrichment)
+- `db.sqlite3` — local SQLite database (default)
+- `cached_financials_2.json` — large JSON cache used by fiscal pull workflows
+
+Templates:
+- `companies/templates/companies/` — company detail, screener, notes, statement table
+- `companies/templates/registration/` — login/signup/email verification
+
+---
+
+## Data model (key tables)
+
+Main entities in `companies/models.py`:
+
+- `Company`
+  - identity + metadata (exchange, ticker, sector/industry, market cap, etc.)
+  - stores freeform research fields (description/special_sits/writeups/history)
+- `Financial`
+  - normalized metric values per period end date
+  - `statement` in {`IS`,`BS`,`CF`}
+  - unique per (company, period_end_date, statement, metric)
+- `StockPrice`
+  - daily OHLCV per company
+- `Note` + `NoteCompany`
+  - per-user research notes
+- `Follow`, `AlertPreference`, `Notification`
+  - following companies + alert preferences + in-app notifications
+- `DiscussionThread` + `DiscussionMessage`
+  - per-company discussion threads
+- `ChatSession` + `ChatMessage`
+  - per-company chat history
+- `Filing`
+  - stores filing metadata + raw text (if used)
+- `SavedScreen`
+  - stores saved screen definitions + generated SQL
+
+---
+
+## Running locally
+
+### 1) Virtualenv
 
 This repo already contains a Windows venv at `.venv/`.
 
-- **PowerShell**
+- PowerShell
   ```powershell
   .\.venv\Scripts\Activate.ps1
   ```
-- **cmd.exe**
+- cmd.exe
   ```bat
   .\.venv\Scripts\activate.bat
   ```
@@ -27,7 +107,19 @@ This repo already contains a Windows venv at `.venv/`.
 pip install -r requirements.txt
 ```
 
-### 3) Run Django (optional)
+### 3) Configure environment
+
+Environment variables are loaded from `.env` via `python-dotenv`.
+
+Common env vars:
+
+- `DEBUG` — `True`/`False`
+- `SECRET_KEY` — Django secret
+- `DATABASE_URL` — if set, `dj-database-url` is used (e.g. Postgres on Render)
+- `OPENAI_API_KEY` — required for screener NL→SQL + AI summary generation
+- `CSRF_TRUSTED_ORIGINS` — comma-separated list of trusted origins (for hosted deployments)
+
+### 4) Migrate + run
 
 ```bash
 python manage.py migrate
@@ -36,57 +128,51 @@ python manage.py runserver
 
 ---
 
-## Data pipeline (fiscal.ai → cache → DB)
+## Deployment notes
 
-### Overview
+- Uses `gunicorn` and `whitenoise` for static files.
+- `ALLOWED_HOSTS` includes `tearsheet.one` and the Render hostname.
+- DB defaults to SQLite, but if `DATABASE_URL` is present it will use that connection.
 
-1. Build a ticker universe (CSV)
-2. Run the fiscal.ai scraper to pull statements
-3. Results are written incrementally to `cached_financials_2.json`
-4. Failures are appended to `financials_failed.csv`
-5. After the cache is correct, run the DB save/import step (TBD / project-specific)
-
-### Cached output
-
-- `cached_financials_2.json`
-  - Keyed by ticker symbol (e.g. `ABNB`)
-  - Each ticker holds statement tables:
-    - `IS` = Income Statement
-    - `BS` = Balance Sheet
-    - `CF` = Cash Flow
-
-A ticker is considered “DONE” when **IS + BS + CF** are present and non-empty.
-
-### Failure log
-
-- `financials_failed.csv`
-  - **Newer rows**: `ticker, attempted_exchange`
-  - Note: older runs may have single-column rows (`ticker`) only.
+See also: `DB_CUTOVER.md`.
 
 ---
 
-## Fiscal pull script
+## Screener (NL → SQL)
 
-Primary script:
-- `scripts/pull_financials_fiscal.py`
+The screener can generate SQL from natural language queries using OpenAI.
 
-Key features:
-- **Magic-link login flow** (supports injecting a magic link via CLI)
-- **Parallel workers** (`--workers N`)
-- Per-worker lightweight auth gate (`/dashboard`) before processing
-- Robust (best-effort) headless interaction around the Mantine slider
-- Real-time progress logging:
-  - per-statement: `[{TICKER}] statement IS/BS/CF captured rows=...`
-  - per-ticker completion: `[worker] FULL_OK ticker=... IS=.. BS=.. CF=.. TRIO=Y/N STREAK=n`
+Safety measures:
+- SQL must start with `SELECT` or `WITH`
+- blocks destructive keywords and multi-statement patterns
+- restricts table access to a small allowlist (`companies_company`, `companies_financial`, `companies_stockprice`) plus CTE names
+- forces a reasonable `LIMIT`
 
-### Exchange mapping (important)
+Code:
+- `companies/utils.py`: `generate_screener_sql()`, `SQLValidator`, `execute_screener_query()`
+- `companies/views.py`: screener endpoints + UI
 
-fiscal.ai expects certain exchange prefixes. In particular:
-- `NASDAQ` → `NasdaqGS`
+---
 
-This mapping is applied automatically when building fiscal.ai tickers.
+## Prices via yfinance
 
-### Typical command (S\&P 500 remaining)
+- `yfinance` is used to fetch market data.
+- `companies/utils.py` contains a `yfinance_symbol()` helper with exchange suffix mapping (e.g. LSE/AIM → `.L`).
+
+---
+
+## Fiscal.ai scraping (optional / one component)
+
+The fiscal.ai pull is **one ingestion path** for statements.
+
+- Script: `scripts/pull_financials_fiscal.py`
+- Output cache: `cached_financials_2.json`
+- Failure log: `financials_failed.csv`
+
+Exchange prefix mapping matters for fiscal.ai:
+- we map `NASDAQ` → `NasdaqGS`
+
+Typical command:
 
 ```bash
 ./.venv/Scripts/python.exe -u scripts/pull_financials_fiscal.py \
@@ -98,52 +184,46 @@ This mapping is applied automatically when building fiscal.ai tickers.
   --failed-csv financials_failed.csv
 ```
 
-Notes:
-- `--magic-link` is time-sensitive; generate a fresh one if workers can’t authenticate.
-- Use `--no-slider` if you want to skip year-range expansion entirely.
+---
+
+## AI enrichment (summaries)
+
+`scripts/generate_AI_summaries.py` can generate and/or update research fields (description, special situations, writeups) using OpenAI + web search.
+
+Requires:
+- `OPENAI_API_KEY`
 
 ---
 
-## Ticker universe files
+## API endpoints (selected)
 
-Common CSVs in this repo:
-- `sp500_tickers.csv` / `sp500_tickers_with_header.csv`
-- `sp500_tickers_fiscal_exchange.csv` (ticker + exchange column)
-- `sp500_remaining_fiscal.csv` (subset still needing work)
+Not exhaustive, but useful entry points:
 
-The scraper will use the **2nd column as exchange** (if present) and falls back to `LSE` when absent.
+- `/api/search/?q=...` — company search
+- `/api/newsfeed/` — newsfeed API
+- `/screener/` — screener UI
+- `/api/screener/run/` — run screener query
+- `/notes/` — notes UI
+- `/companies/<ticker>/...` — company endpoints (alerts, follow/unfollow, prices, discussion, chat)
 
----
-
-## DB import / save
-
-There are multiple DB-related scripts/files present (e.g. `import_to_postgres.py`, `DB_CUTOVER.md`).
-
-The intended workflow after pulls complete is:
-- verify `cached_financials_2.json`
-- then run the project’s DB save/import step (for example `save_cached_financials`, if/when enabled) to persist into the database.
+See routing:
+- `config/urls.py`
+- `companies/urls.py`
 
 ---
 
-## Troubleshooting
+## Operational notes
 
-### Many US tickers “not found”
+### Blocking AI crawlers
 
-Most commonly an exchange-prefix mismatch.
-Example fix applied in this repo:
-- `NASDAQ` must be `NasdaqGS` for fiscal.ai
+`companies/middleware.py` blocks known AI/LLM crawler user agents with 403.
 
-### Headless slider issues
-
-You may see slider logs like:
-- `element click intercepted` (header overlay)
-- `move target out of bounds`
-
-The scraper attempts multiple fallbacks and continues; slider max-year expansion is *nice-to-have* and not required for all tickers.
+Bypass (if you really need it) requires sending a `bot_key` query param or `X-Bot-Key` header matching the expected value.
 
 ---
 
-## Notes / docs
+## Related docs
 
-- `DB_CUTOVER.md` – DB migration/cutover notes
-- `AGENTS.md` / `claude.md` – agent/dev notes
+- `DB_CUTOVER.md` — DB cutover notes
+- `ToDo.txt` — scratch TODO list
+- `AGENTS.md` / `claude.md` — internal dev/agent notes
