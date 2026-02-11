@@ -1,6 +1,7 @@
 import argparse
 import json
 import subprocess
+import sys
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -21,6 +22,8 @@ def main():
     ap = argparse.ArgumentParser(description="Watchdog wrapper for pull_financials_fiscal.py")
     ap.add_argument("--workdir", default=".")
     ap.add_argument("--log-jsonl", default="tmp/fiscal_watchdog.jsonl")
+    ap.add_argument("--python-bin", default=sys.executable or "python3")
+    ap.add_argument("--script", default="scripts/pull_financials_fiscal.py")
     ap.add_argument("--max-restarts", type=int, default=6)
     ap.add_argument("--window-seconds", type=int, default=3600)
     ap.add_argument("--backoff-seconds", type=int, default=30)
@@ -36,7 +39,7 @@ def main():
 
     while True:
         run_num += 1
-        cmd = ["python3", "scripts/pull_financials_fiscal.py", *extra_args]
+        cmd = [args.python_bin, args.script, *extra_args]
         append_jsonl(args.log_jsonl, {"event": "launch", "run_num": run_num, "cmd": cmd})
         proc = subprocess.run(cmd, cwd=args.workdir)
         code = int(proc.returncode)
