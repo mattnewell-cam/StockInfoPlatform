@@ -1,9 +1,6 @@
 import argparse
-import csv
-import datetime as dt
 import json
-import re
-from collections import defaultdict
+from datetime import datetime, UTC
 from pathlib import Path
 
 import requests
@@ -77,7 +74,7 @@ MAPPING = {
 }
 
 
-def sec_get(url):
+def sec_get(url: str):
     r = requests.get(url, headers={"User-Agent": SEC_UA, "Accept": "application/json"}, timeout=40)
     r.raise_for_status()
     return r.json()
@@ -89,15 +86,6 @@ def load_ticker_map():
     for _, row in data.items():
         out[row["ticker"].upper()] = str(row["cik_str"]).zfill(10)
     return out
-
-
-def normalize_class(label: str):
-    x = (label or "").lower()
-    if "insurance" in x:
-        return "insurer"
-    if "bank" in x:
-        return "bank"
-    return "normal"
 
 
 def extract_series(concept_obj):
@@ -118,7 +106,6 @@ def extract_series(concept_obj):
             if end is None or val is None:
                 continue
             data.append((str(end), int(fy) if isinstance(fy, int) else None, val))
-    # dedupe by end date; latest first
     by_end = {}
     for end, fy, val in data:
         by_end[end] = (fy, val)
@@ -131,6 +118,7 @@ def build_statement_rows(facts, mapping):
 
     date_set = set()
     concept_vals = {}
+    mapped_concepts = []
     missing_concepts = []
 
     for concept, label in mapping.items():
@@ -142,12 +130,13 @@ def build_statement_rows(facts, mapping):
         if not series:
             missing_concepts.append(concept)
             continue
-        concept_vals[label] = {end: val for end, fy, val in series}
+        concept_vals[label] = {end: val for end, _, val in series}
         date_set.update(end for end, _, _ in series)
+        mapped_concepts.append({"concept": concept, "metric": label, "points": len(series)})
 
     dates = sorted(date_set, reverse=True)[:8]
     if not dates:
-        return [], missing_concepts
+        return [], mapped_concepts, missing_concepts
 
     header = ["Metric"] + dates
     rows = [header]
@@ -155,11 +144,10 @@ def build_statement_rows(facts, mapping):
         vals = [concept_vals[label].get(d) for d in dates]
         rows.append([label] + vals)
 
-    return rows, missing_concepts
+    return rows, mapped_concepts, missing_concepts
 
 
 def insert_fiscal_section_rows(bs_rows, cf_rows):
-    # fiscal-style section anchors
     if bs_rows:
         bs_rows.insert(1, ["Liabilities"] + [None] * (len(bs_rows[0]) - 1))
         bs_rows.append(["Equity"] + [None] * (len(bs_rows[0]) - 1))
@@ -179,30 +167,76 @@ def strict_anchor_pass(bs_rows, cf_rows):
     )
 
 
+def pct(mapped: int, total: int) -> float:
+    return round((mapped / total) * 100.0, 1) if total else 0.0
+
+
+def row_metric_names(rows):
+    if not rows:
+        return []
+    return [r[0] for r in rows[1:] if r and isinstance(r[0], str)]
+
+
+def metric_coverage(rows, expected_map):
+    got = set(row_metric_names(rows))
+    expected = set(expected_map.values())
+    return {
+        "got_count": len(got),
+        "expected_count": len(expected),
+        "expected_hit_count": len(got & expected),
+        "expected_miss_count": len(expected - got),
+        "expected_miss_metrics": sorted(expected - got),
+    }
+
+
+def format_concept_list(concepts, limit=12):
+    if not concepts:
+        return "none"
+    if isinstance(concepts[0], dict):
+        items = [f"`us-gaap:{x['concept']}`→{x['metric']}" for x in concepts[:limit]]
+        more = len(concepts) - limit
+        if more > 0:
+            items.append(f"… +{more} more")
+        return ", ".join(items)
+    items = [f"`us-gaap:{x}`" for x in concepts[:limit]]
+    more = len(concepts) - limit
+    if more > 0:
+        items.append(f"… +{more} more")
+    return ", ".join(items)
+
+
 def main():
     ap = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[1]
     ap.add_argument("--tickers", default="AAPL,BAC,AIG")
-    ap.add_argument("--class-csv", default=str(root / "sp500_tickers_fiscal_exchange.csv"))
-    ap.add_argument("--out-json", default=str(root / "tmp" / "edgar_tier1_sample.json"))
+    ap.add_argument("--out-json", default=str(root / "reports" / "data" / "edgar_tier1_sample.json"))
     ap.add_argument("--out-md", default=str(root / "reports" / "edgar_tier1_sample_report.md"))
     args = ap.parse_args()
 
     tickers = [x.strip().upper() for x in args.tickers.split(",") if x.strip()]
-
-    # quick class hints from local DB-derived file not available here; hardcode sample split
     cls_hint = {"AAPL": "normal", "BAC": "bank", "AIG": "insurer"}
-
     tmap = load_ticker_map()
 
-    out = {"samples": {}}
-    md = ["# EDGAR Tier-1 Sample Evaluation", "", "| Ticker | Class | IS mapped/missing | BS mapped/missing | CF mapped/missing | Anchor pass |", "|---|---|---:|---:|---:|---:|"]
+    out = {"samples": {}, "generated_utc": datetime.now(UTC).isoformat()}
+
+    md = [
+        "# EDGAR Tier-1 Sample Evaluation (Improved)",
+        "",
+        "Tier-1 only: direct `us-gaap:*` concept mapping to fiscal-style raw metrics (no heuristics, no extension tags).",
+        "",
+        "## Executive Summary",
+        "",
+        "| Ticker | Class | IS coverage | BS coverage | CF coverage | Anchor pass | Go/No-Go |",
+        "|---|---|---:|---:|---:|---:|---|",
+    ]
+
+    sample_lines = []
 
     for t in tickers:
         cik = tmap.get(t)
         if not cik:
             out["samples"][t] = {"error": "ticker_not_found_in_sec_index"}
-            md.append(f"| {t} | ? | - | - | - | no |")
+            md.append(f"| {t} | ? | - | - | - | no | NO-GO |")
             continue
 
         facts = sec_get(FACTS_URL.format(cik=cik))
@@ -213,29 +247,72 @@ def main():
         map_cf = dict(MAPPING["common"]["CF"])
         map_is.update(MAPPING.get(cls, {}).get("IS", {}))
 
-        is_rows, is_missing = build_statement_rows(facts, map_is)
-        bs_rows, bs_missing = build_statement_rows(facts, map_bs)
-        cf_rows, cf_missing = build_statement_rows(facts, map_cf)
+        is_rows, is_mapped, is_missing = build_statement_rows(facts, map_is)
+        bs_rows, bs_mapped, bs_missing = build_statement_rows(facts, map_bs)
+        cf_rows, cf_mapped, cf_missing = build_statement_rows(facts, map_cf)
 
         insert_fiscal_section_rows(bs_rows, cf_rows)
         anchor_ok = strict_anchor_pass(bs_rows, cf_rows) if (bs_rows and cf_rows) else False
 
+        is_cov = metric_coverage(is_rows, map_is)
+        bs_cov = metric_coverage(bs_rows, map_bs)
+        cf_cov = metric_coverage(cf_rows, map_cf)
+
+        stmt_cov_pct = {
+            "IS": pct(len(is_mapped), len(map_is)),
+            "BS": pct(len(bs_mapped), len(map_bs)),
+            "CF": pct(len(cf_mapped), len(map_cf)),
+        }
+
+        decision = "GO" if anchor_ok and min(stmt_cov_pct.values()) >= 50.0 else "NO-GO"
+
         out["samples"][t] = {
             "class": cls,
             "cik": cik,
-            "mapped_counts": {
-                "IS": len(map_is) - len(is_missing),
-                "BS": len(map_bs) - len(bs_missing),
-                "CF": len(map_cf) - len(cf_missing),
-            },
-            "missing_concepts": {"IS": is_missing, "BS": bs_missing, "CF": cf_missing},
             "anchor_pass": anchor_ok,
-            "preview": {"IS": is_rows[:8], "BS": bs_rows[:8], "CF": cf_rows[:8]},
+            "decision": decision,
+            "mapping_totals": {"IS": len(map_is), "BS": len(map_bs), "CF": len(map_cf)},
+            "mapped_counts": {"IS": len(is_mapped), "BS": len(bs_mapped), "CF": len(cf_mapped)},
+            "mapped_pct": stmt_cov_pct,
+            "mapped_concepts": {"IS": is_mapped, "BS": bs_mapped, "CF": cf_mapped},
+            "missing_concepts": {"IS": is_missing, "BS": bs_missing, "CF": cf_missing},
+            "coverage_vs_expected_metrics": {"IS": is_cov, "BS": bs_cov, "CF": cf_cov},
+            "preview": {"IS": is_rows[:10], "BS": bs_rows[:10], "CF": cf_rows[:10]},
         }
 
         md.append(
-            f"| {t} | {cls} | {len(map_is)-len(is_missing)}/{len(is_missing)} | {len(map_bs)-len(bs_missing)}/{len(bs_missing)} | {len(map_cf)-len(cf_missing)}/{len(cf_missing)} | {'yes' if anchor_ok else 'no'} |"
+            f"| {t} | {cls} | {len(is_mapped)}/{len(map_is)} ({stmt_cov_pct['IS']}%) | {len(bs_mapped)}/{len(map_bs)} ({stmt_cov_pct['BS']}%) | {len(cf_mapped)}/{len(map_cf)} ({stmt_cov_pct['CF']}%) | {'yes' if anchor_ok else 'no'} | {decision} |"
         )
+
+        sample_lines.extend([
+            "",
+            f"## {t} ({cls})",
+            "",
+            f"- CIK: `{cik}`",
+            f"- Anchor pass: **{'yes' if anchor_ok else 'no'}**",
+            f"- Decision: **{decision}**",
+            f"- Statement coverage: IS {stmt_cov_pct['IS']}% | BS {stmt_cov_pct['BS']}% | CF {stmt_cov_pct['CF']}%",
+            "",
+            "### Missing `us-gaap` concepts (Tier-1 gaps)",
+            "",
+            f"- IS ({len(is_missing)}): {format_concept_list(is_missing)}",
+            f"- BS ({len(bs_missing)}): {format_concept_list(bs_missing)}",
+            f"- CF ({len(cf_missing)}): {format_concept_list(cf_missing)}",
+            "",
+            "### Mapped concept examples",
+            "",
+            f"- IS ({len(is_mapped)}): {format_concept_list(is_mapped)}",
+            f"- BS ({len(bs_mapped)}): {format_concept_list(bs_mapped)}",
+            f"- CF ({len(cf_mapped)}): {format_concept_list(cf_mapped)}",
+            "",
+            "### Expected fiscal raw metrics still missing in output",
+            "",
+            f"- IS ({is_cov['expected_miss_count']}): {', '.join(is_cov['expected_miss_metrics'][:15]) if is_cov['expected_miss_metrics'] else 'none'}",
+            f"- BS ({bs_cov['expected_miss_count']}): {', '.join(bs_cov['expected_miss_metrics'][:15]) if bs_cov['expected_miss_metrics'] else 'none'}",
+            f"- CF ({cf_cov['expected_miss_count']}): {', '.join(cf_cov['expected_miss_metrics'][:15]) if cf_cov['expected_miss_metrics'] else 'none'}",
+        ])
+
+    md.extend(sample_lines)
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
