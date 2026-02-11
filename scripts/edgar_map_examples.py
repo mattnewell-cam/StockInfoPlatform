@@ -9,59 +9,118 @@ SEC_UA = 'Matt Newell matthew_newell@outlook.com'
 TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json'
 FACTS_URL = 'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json'
 
-MAP_COMMON = {
-    'IS': {
-        'Total Revenues': ['Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'],
-        'Cost of Sales': ['CostOfGoodsAndServicesSold', 'CostOfGoodsSold', 'CostOfRevenue'],
-        'Gross Profit': ['GrossProfit'],
-        'Operating Profit': ['OperatingIncomeLoss'],
-        'Income Before Provision for Income Taxes': ['IncomeBeforeTax', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
-        'Provision for Income Taxes': ['IncomeTaxExpenseBenefit'],
-        'Consolidated Net Income': ['NetIncomeLoss'],
-        'Basic EPS': ['EarningsPerShareBasic'],
-        'Diluted EPS': ['EarningsPerShareDiluted'],
+# Class-specific fiscal-style templates (not forcing bank/insurer into normal template)
+TEMPLATES = {
+    'normal': {
+        'IS': {
+            'Total Revenues': ['Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'],
+            'Cost of Sales': ['CostOfGoodsAndServicesSold', 'CostOfGoodsSold', 'CostOfRevenue'],
+            'Gross Profit': ['GrossProfit'],
+            'Operating Profit': ['OperatingIncomeLoss'],
+            'Income Before Provision for Income Taxes': ['IncomeBeforeTax', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
+            'Provision for Income Taxes': ['IncomeTaxExpenseBenefit'],
+            'Consolidated Net Income': ['NetIncomeLoss'],
+            'Basic EPS': ['EarningsPerShareBasic'],
+            'Diluted EPS': ['EarningsPerShareDiluted'],
+        },
+        'BS': {
+            'Cash and Cash Equivalents': ['CashAndCashEquivalentsAtCarryingValue'],
+            'Accounts Receivable': ['AccountsReceivableNetCurrent'],
+            'Inventories': ['InventoryNet'],
+            'Total Current Assets': ['AssetsCurrent'],
+            'Net Property, Plant & Equipment': ['PropertyPlantAndEquipmentNet'],
+            'Goodwill': ['Goodwill'],
+            'Total Assets': ['Assets'],
+            'Accounts Payable': ['AccountsPayableCurrent'],
+            'Total Current Liabilities': ['LiabilitiesCurrent'],
+            'Long-Term Debt': ['LongTermDebtNoncurrent', 'LongTermDebt'],
+            'Total Liabilities': ['Liabilities'],
+            'Retained Earnings': ['RetainedEarningsAccumulatedDeficit'],
+            "Total Shareholders' Equity": ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+            "Total Liabilities and Shareholders' Equity": ['LiabilitiesAndStockholdersEquity'],
+        },
+        'CF': {
+            'Net Income': ['NetIncomeLoss'],
+            'Depreciation & Amortization': ['DepreciationDepletionAndAmortization', 'DepreciationAmortizationAndAccretionNet'],
+            'Share-Based Compensation Expense': ['ShareBasedCompensation'],
+            'Cash from Operating Activities': ['NetCashProvidedByUsedInOperatingActivities'],
+            'Capital Expenditure': ['PaymentsToAcquirePropertyPlantAndEquipment'],
+            'Cash from Investing Activities': ['NetCashProvidedByUsedInInvestingActivities'],
+            'Cash from Financing Activities': ['NetCashProvidedByUsedInFinancingActivities'],
+            'Repurchases of Common Shares': ['PaymentsForRepurchaseOfCommonStock'],
+            'Issuance of Common Shares': ['ProceedsFromIssuanceOfCommonStock'],
+        },
     },
-    'BS': {
-        'Cash and Cash Equivalents': ['CashAndCashEquivalentsAtCarryingValue'],
-        'Accounts Receivable': ['AccountsReceivableNetCurrent'],
-        'Inventories': ['InventoryNet'],
-        'Total Current Assets': ['AssetsCurrent'],
-        'Net Property, Plant & Equipment': ['PropertyPlantAndEquipmentNet'],
-        'Goodwill': ['Goodwill'],
-        'Total Assets': ['Assets'],
-        'Accounts Payable': ['AccountsPayableCurrent'],
-        'Total Current Liabilities': ['LiabilitiesCurrent'],
-        'Long-Term Debt': ['LongTermDebtNoncurrent', 'LongTermDebt'],
-        'Total Liabilities': ['Liabilities'],
-        'Retained Earnings': ['RetainedEarningsAccumulatedDeficit'],
-        "Total Shareholders' Equity": ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
-        "Total Liabilities and Shareholders' Equity": ['LiabilitiesAndStockholdersEquity'],
-    },
-    'CF': {
-        'Net Income': ['NetIncomeLoss'],
-        'Depreciation & Amortization': ['DepreciationDepletionAndAmortization', 'DepreciationAmortizationAndAccretionNet'],
-        'Share-Based Compensation Expense': ['ShareBasedCompensation'],
-        'Cash from Operating Activities': ['NetCashProvidedByUsedInOperatingActivities'],
-        'Capital Expenditure': ['PaymentsToAcquirePropertyPlantAndEquipment'],
-        'Cash from Investing Activities': ['NetCashProvidedByUsedInInvestingActivities'],
-        'Cash from Financing Activities': ['NetCashProvidedByUsedInFinancingActivities'],
-        'Repurchases of Common Shares': ['PaymentsForRepurchaseOfCommonStock'],
-        'Issuance of Common Shares': ['ProceedsFromIssuanceOfCommonStock'],
-    },
-}
-
-CLASS_EXTRA = {
     'bank': {
         'IS': {
             'Net Interest Income': ['InterestIncomeExpenseNet', 'NetInterestIncome'],
             'Interest Expense': ['InterestExpense'],
-        }
+            'Income Before Provision for Income Taxes': ['IncomeBeforeTax', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
+            'Provision for Income Taxes': ['IncomeTaxExpenseBenefit'],
+            'Consolidated Net Income': ['NetIncomeLoss'],
+            'Basic EPS': ['EarningsPerShareBasic'],
+            'Diluted EPS': ['EarningsPerShareDiluted'],
+        },
+        'BS': {
+            'Cash and Cash Equivalents': ['CashAndCashEquivalentsAtCarryingValue'],
+            'Trading Assets': ['TradingAssets'],
+            'Trading Liabilities': ['TradingLiabilities'],
+            'Goodwill': ['Goodwill'],
+            'Net Intangible Assets': ['IntangibleAssetsNetExcludingGoodwill'],
+            'Total Assets': ['Assets'],
+            'Long-Term Debt': ['LongTermDebtNoncurrent', 'LongTermDebt'],
+            'Total Liabilities': ['Liabilities'],
+            'Retained Earnings': ['RetainedEarningsAccumulatedDeficit'],
+            "Total Shareholders' Equity": ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+            "Total Liabilities and Shareholders' Equity": ['LiabilitiesAndStockholdersEquity'],
+        },
+        'CF': {
+            'Net Income': ['NetIncomeLoss'],
+            'Depreciation & Amortization': ['DepreciationDepletionAndAmortization', 'DepreciationAmortizationAndAccretionNet'],
+            'Cash from Operating Activities': ['NetCashProvidedByUsedInOperatingActivities'],
+            'Cash from Investing Activities': ['NetCashProvidedByUsedInInvestingActivities'],
+            'Cash from Financing Activities': ['NetCashProvidedByUsedInFinancingActivities'],
+            'Capital Expenditure': ['PaymentsToAcquirePropertyPlantAndEquipment'],
+            'Repurchases of Common Shares': ['PaymentsForRepurchaseOfCommonStock'],
+            'Issuance of Common Shares': ['ProceedsFromIssuanceOfCommonStock'],
+        },
     },
     'insurer': {
         'IS': {
-            'Net Premiums Earned': ['PremiumsEarnedNet'],
-            'Insurance Benefits & Claims': ['PolicyholderBenefitsAndClaimsIncurredNet'],
-        }
+            'Net Premiums Earned': ['PremiumsEarnedNet', 'Premiums'],
+            'Insurance Benefits & Claims': ['PolicyholderBenefitsAndClaimsIncurredNet', 'PolicyholderBenefitsAndClaimsIncurred'],
+            'Investment Income': ['InvestmentIncomeInterestAndDividend'],
+            'Total Revenues': ['Revenues', 'SalesRevenueNet'],
+            'Operating Profit': ['OperatingIncomeLoss'],
+            'Income Before Provision for Income Taxes': ['IncomeBeforeTax', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
+            'Provision for Income Taxes': ['IncomeTaxExpenseBenefit'],
+            'Consolidated Net Income': ['NetIncomeLoss'],
+            'Basic EPS': ['EarningsPerShareBasic'],
+            'Diluted EPS': ['EarningsPerShareDiluted'],
+        },
+        'BS': {
+            'Cash and Cash Equivalents': ['CashAndCashEquivalentsAtCarryingValue'],
+            'Debt Securities': ['DebtSecuritiesAvailableForSaleAmortizedCostBasis'],
+            'Total Investments': ['Investments'],
+            'Reinsurance Contract Assets': ['ReinsuranceRecoverables'],
+            'Deferred Acquisition Costs': ['DeferredPolicyAcquisitionCosts'],
+            'Goodwill': ['Goodwill'],
+            'Total Assets': ['Assets'],
+            'Unearned Premiums': ['UnearnedPremiums'],
+            'Claims Reserves': ['PolicyholderBenefitsAndClaimsLiability'],
+            'Total Liabilities': ['Liabilities'],
+            "Total Shareholders' Equity": ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+            "Total Liabilities and Shareholders' Equity": ['LiabilitiesAndStockholdersEquity'],
+        },
+        'CF': {
+            'Net Income': ['NetIncomeLoss'],
+            'Cash from Operating Activities': ['NetCashProvidedByUsedInOperatingActivities'],
+            'Cash from Investing Activities': ['NetCashProvidedByUsedInInvestingActivities'],
+            'Cash from Financing Activities': ['NetCashProvidedByUsedInFinancingActivities'],
+            'Capital Expenditure': ['PaymentsToAcquirePropertyPlantAndEquipment'],
+            'Repurchases of Common Shares': ['PaymentsForRepurchaseOfCommonStock'],
+            'Issuance of Common Shares': ['ProceedsFromIssuanceOfCommonStock'],
+        },
     },
 }
 
@@ -161,7 +220,7 @@ def append_mapping_details(md_lines, statement_name, ordered_map, used_map, miss
 def main():
     ap = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[1]
-    ap.add_argument('--tickers', default='JPM,BRK-B,CRM')
+    ap.add_argument('--tickers', default='JPM,BRK-B')
     ap.add_argument('--db', default=str(root / 'db.sqlite3'))
     ap.add_argument('--cache', default=str(root / 'cached_financials_2.json'))
     ap.add_argument('--out-json', default=str(root / 'reports/data/edgar_mapped_examples.json'))
@@ -177,7 +236,7 @@ def main():
     out = {'tickers': {}, 'requested': tickers, 'not_in_cached_financials_2': not_in_cache}
 
     md = [
-        '# EDGAR -> Fiscal-style mapping examples',
+        '# EDGAR -> Fiscal-style mapping examples (class-specific templates)',
         '',
         'Requested tickers: ' + ', '.join(tickers),
         'Tickers confirmed not in cached_financials_2: ' + (', '.join(not_in_cache) if not_in_cache else 'none'),
@@ -196,40 +255,38 @@ def main():
         facts = sec_get(FACTS_URL.format(cik=cik))
         us = facts.get('facts', {}).get('us-gaap', {})
         company_class = classes.get(t, 'normal')
+        template = TEMPLATES.get(company_class, TEMPLATES['normal'])
 
-        mapping = {k: dict(v) for k, v in MAP_COMMON.items()}
-        for st, extra in CLASS_EXTRA.get(company_class, {}).items():
-            mapping[st].update(extra)
-
-        is_rows, is_used, is_missing = build_stmt(us, mapping['IS'])
-        bs_rows, bs_used, bs_missing = build_stmt(us, mapping['BS'])
-        cf_rows, cf_used, cf_missing = build_stmt(us, mapping['CF'])
+        is_rows, is_used, is_missing = build_stmt(us, template['IS'])
+        bs_rows, bs_used, bs_missing = build_stmt(us, template['BS'])
+        cf_rows, cf_used, cf_missing = build_stmt(us, template['CF'])
 
         out['tickers'][t] = {
             'class': company_class,
             'cik': cik,
+            'template': 'class-specific',
             'statements': {'IS': is_rows, 'BS': bs_rows, 'CF': cf_rows},
             'used_concepts': {'IS': is_used, 'BS': bs_used, 'CF': cf_used},
             'missing_metrics': {'IS': is_missing, 'BS': bs_missing, 'CF': cf_missing},
             'counts': {
-                'IS': {'mapped': len(is_used), 'total': len(mapping['IS'])},
-                'BS': {'mapped': len(bs_used), 'total': len(mapping['BS'])},
-                'CF': {'mapped': len(cf_used), 'total': len(mapping['CF'])},
+                'IS': {'mapped': len(is_used), 'total': len(template['IS'])},
+                'BS': {'mapped': len(bs_used), 'total': len(template['BS'])},
+                'CF': {'mapped': len(cf_used), 'total': len(template['CF'])},
             },
         }
 
         md += [
             f'## {t} ({company_class})',
             '',
-            f"- IS: {len(is_used)}/{len(mapping['IS'])}",
-            f"- BS: {len(bs_used)}/{len(mapping['BS'])}",
-            f"- CF: {len(cf_used)}/{len(mapping['CF'])}",
+            f"- IS: {len(is_used)}/{len(template['IS'])}",
+            f"- BS: {len(bs_used)}/{len(template['BS'])}",
+            f"- CF: {len(cf_used)}/{len(template['CF'])}",
             '',
         ]
 
-        append_mapping_details(md, 'IS', mapping['IS'], is_used, is_missing)
-        append_mapping_details(md, 'BS', mapping['BS'], bs_used, bs_missing)
-        append_mapping_details(md, 'CF', mapping['CF'], cf_used, cf_missing)
+        append_mapping_details(md, 'IS', template['IS'], is_used, is_missing)
+        append_mapping_details(md, 'BS', template['BS'], bs_used, bs_missing)
+        append_mapping_details(md, 'CF', template['CF'], cf_used, cf_missing)
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
