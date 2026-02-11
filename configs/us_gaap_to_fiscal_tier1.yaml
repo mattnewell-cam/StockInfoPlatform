@@ -1,0 +1,60 @@
+# Tier-1 only: direct us-gaap concept -> fiscal raw metric name
+# No heuristics, no extension tags.
+# Class-specific mapping where needed.
+
+common:
+  IS:
+    us-gaap:Revenues: Total Revenues
+    us-gaap:SalesRevenueNet: Total Revenues
+    us-gaap:CostOfGoodsSold: Cost of Sales
+    us-gaap:GrossProfit: Gross Profit
+    us-gaap:OperatingIncomeLoss: Operating Profit
+    us-gaap:IncomeBeforeTax: Income Before Provision for Income Taxes
+    us-gaap:IncomeTaxExpenseBenefit: Provision for Income Taxes
+    us-gaap:NetIncomeLoss: Net Income
+    us-gaap:EarningsPerShareBasic: Basic EPS
+    us-gaap:EarningsPerShareDiluted: Diluted EPS
+    us-gaap:WeightedAverageNumberOfSharesOutstandingBasic: Basic Weighted Average Shares Outstanding
+    us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding: Diluted Weighted Average Shares Outstanding
+
+  BS:
+    us-gaap:CashAndCashEquivalentsAtCarryingValue: Cash and Cash Equivalents
+    us-gaap:ShortTermInvestments: Short-Term Investments
+    us-gaap:AccountsReceivableNetCurrent: Accounts Receivable
+    us-gaap:InventoryNet: Inventories
+    us-gaap:AssetsCurrent: Total Current Assets
+    us-gaap:PropertyPlantAndEquipmentNet: Net Property, Plant & Equipment
+    us-gaap:Goodwill: Goodwill
+    us-gaap:IntangibleAssetsNetExcludingGoodwill: Net Intangible Assets
+    us-gaap:Assets: Total Assets
+    us-gaap:AccountsPayableCurrent: Accounts Payable
+    us-gaap:LiabilitiesCurrent: Total Current Liabilities
+    us-gaap:LongTermDebtNoncurrent: Long-Term Debt
+    us-gaap:Liabilities: Total Liabilities
+    us-gaap:RetainedEarningsAccumulatedDeficit: Retained Earnings
+    us-gaap:CommonStockValue: Common Stock
+    us-gaap:AdditionalPaidInCapital: Additional Paid-in Capital
+    us-gaap:StockholdersEquity: Total Shareholders' Equity
+    us-gaap:LiabilitiesAndStockholdersEquity: Total Liabilities and Shareholders' Equity
+
+  CF:
+    us-gaap:NetIncomeLoss: Net Income
+    us-gaap:DepreciationDepletionAndAmortization: Depreciation & Amortization
+    us-gaap:ShareBasedCompensation: Share-Based Compensation Expense
+    us-gaap:NetCashProvidedByUsedInOperatingActivities: Cash from Operating Activities
+    us-gaap:PaymentsToAcquirePropertyPlantAndEquipment: Capital Expenditure
+    us-gaap:NetCashProvidedByUsedInInvestingActivities: Cash from Investing Activities
+    us-gaap:NetCashProvidedByUsedInFinancingActivities: Cash from Financing Activities
+    us-gaap:PaymentsForRepurchaseOfCommonStock: Repurchases of Common Shares
+    us-gaap:ProceedsFromIssuanceOfCommonStock: Issuance of Common Shares
+
+bank:
+  IS:
+    us-gaap:InterestIncomeOperating: Interest Income
+    us-gaap:InterestExpense: Interest Expense
+    us-gaap:InterestIncomeExpenseNet: Net Interest Income
+
+insurer:
+  IS:
+    us-gaap:PremiumsEarnedNet: Net Premiums Earned
+    us-gaap:PolicyholderBenefitsAndClaimsIncurredNet: Insurance Benefits & Claims
