@@ -203,19 +203,22 @@ def estimate_cost(model, input_tokens, output_tokens):
     return (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
 
 
-def ask_gpt(category, ticker, exchange=None, model="gpt-5-mini", effort="medium"):
+def ask_gpt(category, ticker, exchange=None, model="gpt-5-mini", effort="medium", company_name=None):
     """Call OpenAI API to generate a summary for the given category."""
     client = OpenAI(api_key=API_KEY)
 
     dev_msg = DEV_MSGS[category]
 
-    try:
-        yf_ticker = yf.Ticker(yfinance_symbol(ticker, exchange))
-        info = yf_ticker.get_info()
-        name = info["longName"]
-    except Exception:
-        exch = normalize_exchange(exchange) or "UNKNOWN"
-        name = f"The company with the ticker {exch}:{ticker}"
+    if company_name:
+        name = company_name
+    else:
+        try:
+            yf_ticker = yf.Ticker(yfinance_symbol(ticker, exchange))
+            info = yf_ticker.get_info()
+            name = info["longName"]
+        except Exception:
+            exch = normalize_exchange(exchange) or "UNKNOWN"
+            name = f"The company with the ticker {exch}:{ticker}"
 
     try:
         kwargs = dict(
@@ -312,7 +315,14 @@ def generate_summaries_for_ticker(ticker, categories=None, overwrite=False, mode
             continue
 
         print(f"Generating {category} for {ticker}...")
-        result, meta = ask_gpt(category, ticker, exchange=company.exchange, model=model, effort=effort)
+        result, meta = ask_gpt(
+            category,
+            ticker,
+            exchange=company.exchange,
+            model=model,
+            effort=effort,
+            company_name=company.name,
+        )
         total_cost += meta["cost"]
 
         if result is not None and category == "special_sits":
