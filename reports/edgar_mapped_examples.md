@@ -1,7 +1,7 @@
 # EDGAR -> Fiscal-style mapping examples (class-specific templates)
 
-Requested tickers: JPM, BRK-B
-Tickers confirmed not in cached_financials_2: JPM, BRK-B
+Requested tickers: JPM, PGR
+Tickers confirmed not in cached_financials_2: JPM, PGR
 
 Legend: ✅ mapped to SEC us-gaap concept | ❌ left empty (no candidate concept had usable 10-K FY data)
 
@@ -13,79 +13,445 @@ Legend: ✅ mapped to SEC us-gaap concept | ❌ left empty (no candidate concept
 
 ### IS mapping detail
 
-- ✅ **Net Interest Income** ← `us-gaap:InterestIncomeExpenseNet`
-- ✅ **Interest Expense** ← `us-gaap:InterestExpense`
-- ✅ **Income Before Provision for Income Taxes** ← `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`
-- ✅ **Provision for Income Taxes** ← `us-gaap:IncomeTaxExpenseBenefit`
-- ✅ **Consolidated Net Income** ← `us-gaap:NetIncomeLoss`
-- ✅ **Basic EPS** ← `us-gaap:EarningsPerShareBasic`
-- ✅ **Diluted EPS** ← `us-gaap:EarningsPerShareDiluted`
+- ✅ **Net Interest Income** ← `us-gaap:InterestIncomeExpenseNet` | also present: `us-gaap:InterestIncomeExpenseNet`
+- ✅ **Interest Expense** ← `us-gaap:InterestExpense` | also present: `us-gaap:InterestExpense`
+- ✅ **Income Before Provision for Income Taxes** ← `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest` | also present: `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`
+- ✅ **Provision for Income Taxes** ← `us-gaap:IncomeTaxExpenseBenefit` | also present: `us-gaap:IncomeTaxExpenseBenefit`
+- ✅ **Consolidated Net Income** ← `us-gaap:NetIncomeLoss` | also present: `us-gaap:NetIncomeLoss`
+- ✅ **Basic EPS** ← `us-gaap:EarningsPerShareBasic` | also present: `us-gaap:EarningsPerShareBasic`
+- ✅ **Diluted EPS** ← `us-gaap:EarningsPerShareDiluted` | also present: `us-gaap:EarningsPerShareDiluted`
 
 ### BS mapping detail
 
-- ✅ **Cash and Cash Equivalents** ← `us-gaap:CashAndCashEquivalentsAtCarryingValue`
-- ❌ **Trading Assets** ← EMPTY (tried: `us-gaap:TradingAssets`)
-- ✅ **Trading Liabilities** ← `us-gaap:TradingLiabilities`
-- ✅ **Goodwill** ← `us-gaap:Goodwill`
-- ❌ **Net Intangible Assets** ← EMPTY (tried: `us-gaap:IntangibleAssetsNetExcludingGoodwill`)
-- ✅ **Total Assets** ← `us-gaap:Assets`
-- ✅ **Long-Term Debt** ← `us-gaap:LongTermDebt`
-- ✅ **Total Liabilities** ← `us-gaap:Liabilities`
-- ✅ **Retained Earnings** ← `us-gaap:RetainedEarningsAccumulatedDeficit`
-- ✅ **Total Shareholders' Equity** ← `us-gaap:StockholdersEquity`
-- ✅ **Total Liabilities and Shareholders' Equity** ← `us-gaap:LiabilitiesAndStockholdersEquity`
+- ✅ **Cash and Cash Equivalents** ← `us-gaap:CashAndCashEquivalentsAtCarryingValue` | also present: `us-gaap:CashAndCashEquivalentsAtCarryingValue`
+- ❌ **Trading Assets** ← EMPTY (tried: `us-gaap:TradingAssets`) | present from candidates: none
+- ✅ **Trading Liabilities** ← `us-gaap:TradingLiabilities` | also present: `us-gaap:TradingLiabilities`
+- ✅ **Goodwill** ← `us-gaap:Goodwill` | also present: `us-gaap:Goodwill`
+- ❌ **Net Intangible Assets** ← EMPTY (tried: `us-gaap:IntangibleAssetsNetExcludingGoodwill`) | present from candidates: none
+- ✅ **Total Assets** ← `us-gaap:Assets` | also present: `us-gaap:Assets`
+- ✅ **Long-Term Debt** ← `us-gaap:LongTermDebt` | also present: `us-gaap:LongTermDebt`
+- ✅ **Total Liabilities** ← `us-gaap:Liabilities` | also present: `us-gaap:Liabilities`
+- ✅ **Retained Earnings** ← `us-gaap:RetainedEarningsAccumulatedDeficit` | also present: `us-gaap:RetainedEarningsAccumulatedDeficit`
+- ✅ **Total Shareholders' Equity** ← `us-gaap:StockholdersEquity` | also present: `us-gaap:StockholdersEquity`, `us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest`
+- ✅ **Total Liabilities and Shareholders' Equity** ← `us-gaap:LiabilitiesAndStockholdersEquity` | also present: `us-gaap:LiabilitiesAndStockholdersEquity`
 
 ### CF mapping detail
 
-- ✅ **Net Income** ← `us-gaap:NetIncomeLoss`
-- ✅ **Depreciation & Amortization** ← `us-gaap:DepreciationAmortizationAndAccretionNet`
-- ✅ **Cash from Operating Activities** ← `us-gaap:NetCashProvidedByUsedInOperatingActivities`
-- ✅ **Cash from Investing Activities** ← `us-gaap:NetCashProvidedByUsedInInvestingActivities`
-- ✅ **Cash from Financing Activities** ← `us-gaap:NetCashProvidedByUsedInFinancingActivities`
-- ❌ **Capital Expenditure** ← EMPTY (tried: `us-gaap:PaymentsToAcquirePropertyPlantAndEquipment`)
-- ✅ **Repurchases of Common Shares** ← `us-gaap:PaymentsForRepurchaseOfCommonStock`
-- ✅ **Issuance of Common Shares** ← `us-gaap:ProceedsFromIssuanceOfCommonStock`
+- ✅ **Net Income** ← `us-gaap:NetIncomeLoss` | also present: `us-gaap:NetIncomeLoss`
+- ✅ **Depreciation & Amortization** ← `us-gaap:DepreciationAmortizationAndAccretionNet` | also present: `us-gaap:DepreciationAmortizationAndAccretionNet`
+- ✅ **Cash from Operating Activities** ← `us-gaap:NetCashProvidedByUsedInOperatingActivities` | also present: `us-gaap:NetCashProvidedByUsedInOperatingActivities`
+- ✅ **Cash from Investing Activities** ← `us-gaap:NetCashProvidedByUsedInInvestingActivities` | also present: `us-gaap:NetCashProvidedByUsedInInvestingActivities`
+- ✅ **Cash from Financing Activities** ← `us-gaap:NetCashProvidedByUsedInFinancingActivities` | also present: `us-gaap:NetCashProvidedByUsedInFinancingActivities`
+- ❌ **Capital Expenditure** ← EMPTY (tried: `us-gaap:PaymentsToAcquirePropertyPlantAndEquipment`) | present from candidates: none
+- ✅ **Repurchases of Common Shares** ← `us-gaap:PaymentsForRepurchaseOfCommonStock` | also present: `us-gaap:PaymentsForRepurchaseOfCommonStock`
+- ✅ **Issuance of Common Shares** ← `us-gaap:ProceedsFromIssuanceOfCommonStock` | also present: `us-gaap:ProceedsFromIssuanceOfCommonStock`
 
-## BRK-B (insurer)
+### Additional us-gaap items present (statement-ish, 10-K FY)
 
-- IS: 6/10
-- BS: 7/12
+- `us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent`
+- `us-gaap:AccountsPayableAndOtherAccruedLiabilities`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossOtherThanTemporaryImpairmentNotCreditLossNetOfTaxAvailableforsaleDebtSecurities`
+- `us-gaap:AdministrativeServicesRevenue`
+- `us-gaap:AffordableHousingTaxCreditsAndOtherTaxBenefitsAmount`
+- `us-gaap:AmortizationMethodQualifiedAffordableHousingProjectInvestments`
+- `us-gaap:AmortizationMethodQualifiedAffordableHousingProjectInvestmentsAmortization`
+- `us-gaap:AmortizationOfIntangibleAssets`
+- `us-gaap:AmountRecognizedInNetPeriodicBenefitCostAndOtherComprehensiveIncomeLossBeforeTax`
+- `us-gaap:AntidilutiveSecuritiesExcludedFromComputationOfEarningsPerShareAmount`
+- `us-gaap:AssetManagementFees`
+- `us-gaap:AssetManagementFees1`
+- `us-gaap:Assets`
+- `us-gaap:AssetsSoldUnderAgreementsToRepurchaseRepurchaseLiability`
+- `us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax`
+- `us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax`
+- `us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis`
+- `us-gaap:AvailableForSaleEquitySecuritiesAccumulatedGrossUnrealizedGainBeforeTax`
+- `us-gaap:AvailableForSaleEquitySecuritiesAccumulatedGrossUnrealizedLossBeforeTax`
+- `us-gaap:AvailableForSaleEquitySecuritiesAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesAccumulatedGrossUnrealizedGainBeforeTax`
+- `us-gaap:AvailableForSaleSecuritiesAccumulatedGrossUnrealizedLossBeforeTax`
+- `us-gaap:AvailableForSaleSecuritiesChangeInNetUnrealizedHoldingGainLossNetOfTax`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesNextRollingTwelveMonthsAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesNextRollingTwelveMonthsFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingAfterYearTenAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingAfterYearTenFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingYearSixThroughTenAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingYearSixThroughTenFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingYearTwoThroughFiveAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesRollingYearTwoThroughFiveFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesSingleMaturityDateAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesDebtSecurities`
+- `us-gaap:AvailableForSaleSecuritiesEquitySecurities`
+- `us-gaap:BeneficialInterest`
+- `us-gaap:BrokerageCommissionsRevenue`
+- `us-gaap:BusinessAcquisitionPercentageOfVotingInterestsAcquired`
+- `us-gaap:BusinessAcquisitionProFormaEarningsPerShareBasic`
+- `us-gaap:BusinessAcquisitionProFormaEarningsPerShareDiluted`
+- `us-gaap:BusinessAcquisitionProFormaIncomeLossFromContinuingOperationsBeforeChangesInAccountingAndExtraordinaryItemsNetOfTax`
+- `us-gaap:BusinessAcquisitionProFormaIncomeLossFromContinuingOperationsBeforeChangesInAccountingAndExtraordinaryItemsNetOfTaxPerShareBasic`
+- `us-gaap:BusinessAcquisitionProFormaIncomeLossFromContinuingOperationsBeforeChangesInAccountingAndExtraordinaryItemsNetOfTaxPerShareDiluted`
+- `us-gaap:BusinessAcquisitionProFormaNetIncomeLoss`
+- `us-gaap:BusinessAcquisitionProFormaRevenue`
+- `us-gaap:BusinessCombinationStepAcquisitionEquityInterestInAcquireeRemeasurementGainOrLoss`
+- `us-gaap:CapitalRequiredForCapitalAdequacyToRiskWeightedAssets`
+- `us-gaap:CapitalRequiredToBeWellCapitalizedToRiskWeightedAssets`
+- `us-gaap:CashAndCashEquivalentsAtCarryingValue`
+- `us-gaap:CashAndCashEquivalentsPeriodIncreaseDecrease`
+- `us-gaap:CashAndDueFromBanks`
+- `us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents`
+- `us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect`
+- `us-gaap:CashFlowHedgeGainLossToBeReclassifiedWithinTwelveMonths`
+- `us-gaap:CashFlowsBetweenSecuritizationSpecialPurposeEntitySPEAndTransferorOtherCashFlowsReceivedOnRetainedInterests`
+- `us-gaap:CashFlowsBetweenSecuritizationSpecialPurposeEntitySPEAndTransferorPurchasesOfDelinquentOrForeclosedAssets`
+- `us-gaap:CashFlowsBetweenSecuritizationSpecialPurposeEntitySPEAndTransferorServicingFeesReceived`
+- `us-gaap:CashReserveDepositRequiredAndMade`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesAccretableYield`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesAccretableYieldAccretion`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesAccretableYieldReclassificationsToNonaccretableDifference`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesAllowanceForLoanLosses`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesConsumerOutstandingBalance`
+- `us-gaap:CertainLoansAcquiredInTransferNotAccountedForAsDebtSecuritiesOutstandingBalance`
+- `us-gaap:CertainLoansAndDebtSecuritiesAcquiredInTransferAllowanceForCreditLossesDueToSubsequentImpairment`
+- `us-gaap:CommonStockDividendsPerShareCashPaid`
+- `us-gaap:ComprehensiveIncomeNetOfTax`
+- `us-gaap:ContinuingInvolvementWithTransferredFinancialAssetsPrincipalAmountOutstanding`
+- `us-gaap:ContractWithCustomerRefundLiabilityCurrent`
+- `us-gaap:CreditRiskDerivativeAssetsAtFairValue`
+- `us-gaap:CreditRiskDerivativeLiabilitiesAtFairValue`
+- `us-gaap:CurrentFederalTaxExpenseBenefit`
+- `us-gaap:CurrentForeignTaxExpenseBenefit`
+- `us-gaap:CurrentIncomeTaxExpenseBenefit`
+- `us-gaap:CurrentStateAndLocalTaxExpenseBenefit`
+- `us-gaap:CustomerLoyaltyProgramLiabilityCurrent`
+- `us-gaap:DebtInstrumentInterestRateStatedPercentageRateRangeMaximum`
+- `us-gaap:DebtInstrumentInterestRateStatedPercentageRateRangeMinimum`
+- `us-gaap:DebtSecuritiesAvailableForSaleAccruedInterestWriteoff`
+- `us-gaap:DebtSecuritiesAvailableForSaleAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAmortizedCostAllowanceForCreditLossExcludingAccruedInterest`
+- `us-gaap:DebtSecuritiesAvailableForSaleAmortizedCostExcludingAccruedInterestAfterAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAmortizedCostExcludingAccruedInterestBeforeAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturity`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturityAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturityAmortizedCostAfterAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturityCumulativeUnrecognizedGain`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturityCumulativeUnrecognizedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAndHeldToMaturityFairValue`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPosition12MonthsOrLonger`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPosition12MonthsOrLongerAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPositionLessThan12Months`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPositionLessThan12MonthsAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleExcludingAccruedInterest`
+- `us-gaap:DebtSecuritiesAvailableForSaleMaturityAfter10YearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesAvailableForSaleMaturityAfterFiveThroughTenYearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesAvailableForSaleMaturityAfterOneThroughFiveYearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesAvailableForSaleMaturityWithinOneYearWeightedAverageYield`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedGain`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedGainLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedLossExcludingOtherThanTemporaryImpairment`
+- `us-gaap:DebtSecuritiesAvailableForSaleUnrealizedLossPosition`
+- `us-gaap:DebtSecuritiesAvailableForSaleUnrealizedLossPositionAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleWeightedAverageYield`
+- `us-gaap:DebtSecuritiesHeldToMaturityAccruedInterestBeforeAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesHeldToMaturityAccruedInterestWriteoff`
+- `us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossExcludingAccruedInterest`
+- `us-gaap:DebtSecuritiesHeldToMaturityCreditLossExpenseReversal`
+- `us-gaap:DebtSecuritiesHeldToMaturityExcludingAccruedInterestAfterAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesHeldToMaturityExcludingAccruedInterestBeforeAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesHeldToMaturityMaturityAfter10YearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesHeldToMaturityMaturityAfterFiveThroughTenYearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesHeldToMaturityMaturityAfterOneThroughFiveYearsWeightedAverageYield`
+- `us-gaap:DebtSecuritiesHeldToMaturityMaturityWithinOneYearWeightedAverageYield`
+- `us-gaap:DebtSecuritiesHeldToMaturityPurchase`
+- `us-gaap:DebtSecuritiesHeldToMaturityWeightedAverageYield`
+- `us-gaap:DeferredCompensationArrangementWithIndividualCompensationExpense`
+- `us-gaap:DeferredFederalIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredForeignIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredIncomeTaxLiabilities`
+- `us-gaap:DeferredStateAndLocalIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredTaxAssetsDeferredIncome`
+- `us-gaap:DeferredTaxAssetsGross`
+- `us-gaap:DeferredTaxAssetsLiabilitiesNet`
+- `us-gaap:DeferredTaxAssetsNet`
+- `us-gaap:DeferredTaxAssetsOperatingLossCarryforwards`
+- `us-gaap:DeferredTaxAssetsPropertyPlantAndEquipment`
+- `us-gaap:DeferredTaxAssetsTaxCreditCarryforwardsForeign`
+- `us-gaap:DeferredTaxAssetsTaxCreditCarryforwardsOther`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseCompensationAndBenefits`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsLossReserves`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsProvisionForLoanLosses`
+- `us-gaap:DeferredTaxAssetsValuationAllowance`
+- `us-gaap:DeferredTaxLiabilities`
+- `us-gaap:DeferredTaxLiabilitiesLeasingArrangements`
+- `us-gaap:DeferredTaxLiabilitiesMortgageServicingRights`
+- `us-gaap:DeferredTaxLiabilitiesOther`
+- `us-gaap:DeferredTaxLiabilitiesPropertyPlantAndEquipment`
+- `us-gaap:DeferredTaxLiabilitiesTaxDeferredIncome`
+- `us-gaap:DeferredTaxLiabilitiesUndistributedForeignEarnings`
+- `us-gaap:DefinedBenefitPlanAccumulatedOtherComprehensiveIncomeBeforeTax`
+- `us-gaap:DefinedBenefitPlanActualReturnOnPlanAssetsStillHeld`
+- `us-gaap:DefinedBenefitPlanAssumptionsUsedCalculatingNetPeriodicBenefitCostExpectedLongTermReturnOnAssets`
+- `us-gaap:DefinedBenefitPlanChangeInFairValueOfPlanAssetsLevel3ReconciliationPeriodIncreaseDecrease`
+- `us-gaap:DefinedBenefitPlanEffectOfOnePercentagePointDecreaseOnServiceAndInterestCostComponents`
+- `us-gaap:DefinedBenefitPlanEffectOfOnePercentagePointDecreaseOnServiceAndInterestCostComponents1`
+- `us-gaap:DefinedBenefitPlanEffectOfOnePercentagePointIncreaseOnServiceAndInterestCostComponents`
+- `us-gaap:DefinedBenefitPlanFairValueOfPlanAssets`
+- `us-gaap:DefinedBenefitPlanPlanAssetsLevel3ReconciliationDecreaseForSettlement`
+- `us-gaap:DepreciationAmortizationAndAccretionNet`
+- `us-gaap:DerivativeAssetAfterOffsetSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeAssetCollateralObligationToReturnCashOffset`
+- `us-gaap:DerivativeAssetDesignatedAsHedgingInstrumentFairValue`
+- `us-gaap:DerivativeAssetFairValueGrossAssetIncludingNotSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeAssetFairValueGrossLiabilityAndObligationToReturnCashOffset`
+- `us-gaap:DerivativeAssetNotDesignatedAsHedgingInstrumentFairValue`
+- `us-gaap:DerivativeAssetNotSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeAssets`
+- `us-gaap:DerivativeCreditRiskValuationAdjustmentDerivativeAssets`
+- `us-gaap:DerivativeCreditRiskValuationAdjustmentDerivativeLiabilities`
+- `us-gaap:DerivativeFairValueOfDerivativeAsset`
+- `us-gaap:DerivativeFairValueOfDerivativeAssetAmountNotOffsetAgainstCollateral`
+- `us-gaap:DerivativeFairValueOfDerivativeAssetAmountOffsetAgainstCollateral`
+- `us-gaap:DerivativeFairValueOfDerivativeLiability`
+- `us-gaap:DerivativeFairValueOfDerivativeLiabilityAmountNotOffsetAgainstCollateral`
+- `us-gaap:DerivativeFairValueOfDerivativeLiabilityAmountOffsetAgainstCollateral`
+- `us-gaap:DerivativeLiabilities`
+- `us-gaap:DerivativeLiabilityAfterOffsetSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeLiabilityCollateralRightToReclaimCashOffset`
+- `us-gaap:DerivativeLiabilityDesignatedAsHedgingInstrumentFairValue`
+- `us-gaap:DerivativeLiabilityFairValueGrossAssetAndRightToReclaimCashOffset`
+- `us-gaap:DerivativeLiabilityFairValueGrossLiabilityIncludingNotSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeLiabilityNotDesignatedAsHedgingInstrumentFairValue`
+- `us-gaap:DerivativeLiabilityNotSubjectToMasterNettingArrangement`
+- `us-gaap:DerivativeNetLiabilityPositionAggregateFairValue`
+- `us-gaap:EarningsPerShareBasic`
+- `us-gaap:EarningsPerShareDiluted`
+
+## PGR (insurer)
+
+- IS: 8/10
+- BS: 9/12
 - CF: 6/7
 
 ### IS mapping detail
 
-- ❌ **Net Premiums Earned** ← EMPTY (tried: `us-gaap:PremiumsEarnedNet`, `us-gaap:Premiums`)
-- ❌ **Insurance Benefits & Claims** ← EMPTY (tried: `us-gaap:PolicyholderBenefitsAndClaimsIncurredNet`, `us-gaap:PolicyholderBenefitsAndClaimsIncurred`)
-- ❌ **Investment Income** ← EMPTY (tried: `us-gaap:InvestmentIncomeInterestAndDividend`)
-- ✅ **Total Revenues** ← `us-gaap:Revenues`
-- ✅ **Operating Profit** ← `us-gaap:OperatingIncomeLoss`
-- ✅ **Income Before Provision for Income Taxes** ← `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`
-- ✅ **Provision for Income Taxes** ← `us-gaap:IncomeTaxExpenseBenefit`
-- ✅ **Consolidated Net Income** ← `us-gaap:NetIncomeLoss`
-- ✅ **Basic EPS** ← `us-gaap:EarningsPerShareBasic`
-- ❌ **Diluted EPS** ← EMPTY (tried: `us-gaap:EarningsPerShareDiluted`)
+- ✅ **Net Premiums Earned** ← `us-gaap:PremiumsEarnedNet` | also present: `us-gaap:PremiumsEarnedNet`
+- ✅ **Insurance Benefits & Claims** ← `us-gaap:PolicyholderBenefitsAndClaimsIncurredNet` | also present: `us-gaap:PolicyholderBenefitsAndClaimsIncurredNet`
+- ❌ **Investment Income** ← EMPTY (tried: `us-gaap:InvestmentIncomeInterestAndDividend`) | present from candidates: none
+- ✅ **Total Revenues** ← `us-gaap:Revenues` | also present: `us-gaap:Revenues`
+- ❌ **Operating Profit** ← EMPTY (tried: `us-gaap:OperatingIncomeLoss`) | present from candidates: none
+- ✅ **Income Before Provision for Income Taxes** ← `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest` | also present: `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`
+- ✅ **Provision for Income Taxes** ← `us-gaap:IncomeTaxExpenseBenefit` | also present: `us-gaap:IncomeTaxExpenseBenefit`
+- ✅ **Consolidated Net Income** ← `us-gaap:NetIncomeLoss` | also present: `us-gaap:NetIncomeLoss`
+- ✅ **Basic EPS** ← `us-gaap:EarningsPerShareBasic` | also present: `us-gaap:EarningsPerShareBasic`
+- ✅ **Diluted EPS** ← `us-gaap:EarningsPerShareDiluted` | also present: `us-gaap:EarningsPerShareDiluted`
 
 ### BS mapping detail
 
-- ✅ **Cash and Cash Equivalents** ← `us-gaap:CashAndCashEquivalentsAtCarryingValue`
-- ❌ **Debt Securities** ← EMPTY (tried: `us-gaap:DebtSecuritiesAvailableForSaleAmortizedCostBasis`)
-- ❌ **Total Investments** ← EMPTY (tried: `us-gaap:Investments`)
-- ❌ **Reinsurance Contract Assets** ← EMPTY (tried: `us-gaap:ReinsuranceRecoverables`)
-- ✅ **Deferred Acquisition Costs** ← `us-gaap:DeferredPolicyAcquisitionCosts`
-- ✅ **Goodwill** ← `us-gaap:Goodwill`
-- ✅ **Total Assets** ← `us-gaap:Assets`
-- ❌ **Unearned Premiums** ← EMPTY (tried: `us-gaap:UnearnedPremiums`)
-- ❌ **Claims Reserves** ← EMPTY (tried: `us-gaap:PolicyholderBenefitsAndClaimsLiability`)
-- ✅ **Total Liabilities** ← `us-gaap:Liabilities`
-- ✅ **Total Shareholders' Equity** ← `us-gaap:StockholdersEquity`
-- ✅ **Total Liabilities and Shareholders' Equity** ← `us-gaap:LiabilitiesAndStockholdersEquity`
+- ❌ **Cash and Cash Equivalents** ← EMPTY (tried: `us-gaap:CashAndCashEquivalentsAtCarryingValue`) | present from candidates: none
+- ❌ **Debt Securities** ← EMPTY (tried: `us-gaap:DebtSecuritiesAvailableForSaleAmortizedCostBasis`) | present from candidates: none
+- ✅ **Total Investments** ← `us-gaap:Investments` | also present: `us-gaap:Investments`
+- ✅ **Reinsurance Contract Assets** ← `us-gaap:ReinsuranceRecoverables` | also present: `us-gaap:ReinsuranceRecoverables`
+- ✅ **Deferred Acquisition Costs** ← `us-gaap:DeferredPolicyAcquisitionCosts` | also present: `us-gaap:DeferredPolicyAcquisitionCosts`
+- ✅ **Goodwill** ← `us-gaap:Goodwill` | also present: `us-gaap:Goodwill`
+- ✅ **Total Assets** ← `us-gaap:Assets` | also present: `us-gaap:Assets`
+- ✅ **Unearned Premiums** ← `us-gaap:UnearnedPremiums` | also present: `us-gaap:UnearnedPremiums`
+- ❌ **Claims Reserves** ← EMPTY (tried: `us-gaap:PolicyholderBenefitsAndClaimsLiability`) | present from candidates: none
+- ✅ **Total Liabilities** ← `us-gaap:Liabilities` | also present: `us-gaap:Liabilities`
+- ✅ **Total Shareholders' Equity** ← `us-gaap:StockholdersEquity` | also present: `us-gaap:StockholdersEquity`
+- ✅ **Total Liabilities and Shareholders' Equity** ← `us-gaap:LiabilitiesAndStockholdersEquity` | also present: `us-gaap:LiabilitiesAndStockholdersEquity`
 
 ### CF mapping detail
 
-- ✅ **Net Income** ← `us-gaap:NetIncomeLoss`
-- ✅ **Cash from Operating Activities** ← `us-gaap:NetCashProvidedByUsedInOperatingActivities`
-- ✅ **Cash from Investing Activities** ← `us-gaap:NetCashProvidedByUsedInInvestingActivities`
-- ✅ **Cash from Financing Activities** ← `us-gaap:NetCashProvidedByUsedInFinancingActivities`
-- ✅ **Capital Expenditure** ← `us-gaap:PaymentsToAcquirePropertyPlantAndEquipment`
-- ✅ **Repurchases of Common Shares** ← `us-gaap:PaymentsForRepurchaseOfCommonStock`
-- ❌ **Issuance of Common Shares** ← EMPTY (tried: `us-gaap:ProceedsFromIssuanceOfCommonStock`)
+- ✅ **Net Income** ← `us-gaap:NetIncomeLoss` | also present: `us-gaap:NetIncomeLoss`
+- ✅ **Cash from Operating Activities** ← `us-gaap:NetCashProvidedByUsedInOperatingActivities` | also present: `us-gaap:NetCashProvidedByUsedInOperatingActivities`
+- ✅ **Cash from Investing Activities** ← `us-gaap:NetCashProvidedByUsedInInvestingActivities` | also present: `us-gaap:NetCashProvidedByUsedInInvestingActivities`
+- ✅ **Cash from Financing Activities** ← `us-gaap:NetCashProvidedByUsedInFinancingActivities` | also present: `us-gaap:NetCashProvidedByUsedInFinancingActivities`
+- ✅ **Capital Expenditure** ← `us-gaap:PaymentsToAcquirePropertyPlantAndEquipment` | also present: `us-gaap:PaymentsToAcquirePropertyPlantAndEquipment`
+- ✅ **Repurchases of Common Shares** ← `us-gaap:PaymentsForRepurchaseOfCommonStock` | also present: `us-gaap:PaymentsForRepurchaseOfCommonStock`
+- ❌ **Issuance of Common Shares** ← EMPTY (tried: `us-gaap:ProceedsFromIssuanceOfCommonStock`) | present from candidates: none
+
+### Additional us-gaap items present (statement-ish, 10-K FY)
+
+- `us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent`
+- `us-gaap:AccretionAmortizationOfDiscountsAndPremiumsInvestments`
+- `us-gaap:AccruedIncomeTaxes`
+- `us-gaap:AccruedInvestmentIncomeReceivable`
+- `us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossBeforeTax1`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossCumulativeChangesInNetGainLossFromCashFlowHedgesEffectNetOfTax`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax`
+- `us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax`
+- `us-gaap:AdvertisingExpense`
+- `us-gaap:AllowanceForDoubtfulAccountsPremiumsAndOtherReceivables`
+- `us-gaap:AmortizationOfIntangibleAssets`
+- `us-gaap:AociBeforeTaxAttributableToParent`
+- `us-gaap:AociLossCashFlowHedgeCumulativeGainLossAfterTax`
+- `us-gaap:AociTaxAttributableToParent`
+- `us-gaap:Assets`
+- `us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedGainBeforeTax`
+- `us-gaap:AvailableForSaleDebtSecuritiesAccumulatedGrossUnrealizedLossBeforeTax`
+- `us-gaap:AvailableForSaleDebtSecuritiesAmortizedCostBasis`
+- `us-gaap:AvailableForSaleSecuritiesAccumulatedGrossUnrealizedGainBeforeTax`
+- `us-gaap:AvailableForSaleSecuritiesAccumulatedGrossUnrealizedLossBeforeTax`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterFiveThroughTenYearsAmortizedCost`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterFiveThroughTenYearsFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterOneThroughFiveYearsAmortizedCost`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterOneThroughFiveYearsFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterTenYearsAmortizedCost`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterTenYearsFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAmortizedCost`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesWithinOneYearAmortizedCost`
+- `us-gaap:AvailableForSaleSecuritiesDebtMaturitiesWithinOneYearFairValue`
+- `us-gaap:AvailableForSaleSecuritiesDebtSecurities`
+- `us-gaap:AvailableForSaleSecuritiesEquitySecurities`
+- `us-gaap:BenefitsLossesAndExpenses`
+- `us-gaap:Cash`
+- `us-gaap:CashAndCashEquivalentsPeriodIncreaseDecrease`
+- `us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents`
+- `us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect`
+- `us-gaap:CashDividendsPaidToParentCompany`
+- `us-gaap:CashFlowHedgeGainLossReclassifiedToInterestExpenseNet`
+- `us-gaap:CashFlowHedgeGainReclassifiedToEarnings`
+- `us-gaap:CededPremiumsEarned`
+- `us-gaap:CededPremiumsEarnedPropertyAndCasualty`
+- `us-gaap:CededPremiumsWritten`
+- `us-gaap:ComprehensiveIncomeNetOfTax`
+- `us-gaap:ComprehensiveIncomeNetOfTaxIncludingPortionAttributableToNoncontrollingInterest`
+- `us-gaap:CurrentFederalTaxExpenseBenefit`
+- `us-gaap:CurrentIncomeTaxExpenseBenefit`
+- `us-gaap:CurrentStateAndLocalTaxExpenseBenefit`
+- `us-gaap:DebtAndEquitySecuritiesGainLoss`
+- `us-gaap:DebtAndEquitySecuritiesRealizedGainLoss`
+- `us-gaap:DebtAndEquitySecuritiesRealizedGainLossExcludingOtherThanTemporaryImpairment`
+- `us-gaap:DebtAndEquitySecuritiesUnrealizedGainLoss`
+- `us-gaap:DebtAndEquitySecuritiesUnrealizedGainLossExcludingOtherThanTemporaryImpairment`
+- `us-gaap:DebtInstrumentCarryingAmount`
+- `us-gaap:DebtInstrumentFaceAmount`
+- `us-gaap:DebtInstrumentFairValue`
+- `us-gaap:DebtInstrumentInterestRateStatedPercentage`
+- `us-gaap:DebtInstrumentPrincipalOutstanding`
+- `us-gaap:DebtLongtermAndShorttermCombinedAmount`
+- `us-gaap:DebtSecuritiesAvailableForSaleAllowanceForCreditLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleAllowanceForCreditLossNotPreviouslyRecorded`
+- `us-gaap:DebtSecuritiesAvailableForSaleAllowanceForCreditLossWriteoff`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPosition12MonthsOrLonger`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPosition12MonthsOrLongerAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPosition12MonthsOrLongerNumberOfPositions`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPositionLessThan12Months`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPositionLessThan12MonthsAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleContinuousUnrealizedLossPositionLessThan12MonthsNumberOfPositions`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedGain`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedGainLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedGainLossExcludingOtherThanTemporaryImpairment`
+- `us-gaap:DebtSecuritiesAvailableForSaleRealizedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleUnrealizedLossPosition`
+- `us-gaap:DebtSecuritiesAvailableForSaleUnrealizedLossPositionAccumulatedLoss`
+- `us-gaap:DebtSecuritiesAvailableForSaleUnrealizedLossPositionNumberOfPositions`
+- `us-gaap:DebtSecuritiesTradingGainLoss`
+- `us-gaap:DeferredCompensationPlanAssets`
+- `us-gaap:DeferredFederalIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense`
+- `us-gaap:DeferredStateAndLocalIncomeTaxExpenseBenefit`
+- `us-gaap:DeferredTaxAssetsHedgingTransactions`
+- `us-gaap:DeferredTaxAssetsInvestments`
+- `us-gaap:DeferredTaxAssetsLiabilitiesNet`
+- `us-gaap:DeferredTaxAssetsNet`
+- `us-gaap:DeferredTaxAssetsOther`
+- `us-gaap:DeferredTaxAssetsStateTaxes`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsImpairmentLosses`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsLossReserves`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsReserves`
+- `us-gaap:DeferredTaxAssetsTaxDeferredExpenseReservesAndAccrualsUnearnedPremiumsReserve`
+- `us-gaap:DeferredTaxAssetsUnrealizedLossesOnAvailableforSaleSecuritiesGross`
+- `us-gaap:DeferredTaxAssetsUnrealizedLossesOnTradingSecurities`
+- `us-gaap:DeferredTaxAssetsValuationAllowance`
+- `us-gaap:DeferredTaxLiabilities`
+- `us-gaap:DeferredTaxLiabilitiesDeferredExpenseDeferredPolicyAcquisitionCost`
+- `us-gaap:DeferredTaxLiabilitiesDerivatives`
+- `us-gaap:DeferredTaxLiabilitiesGoodwillAndIntangibleAssetsIntangibleAssets`
+- `us-gaap:DeferredTaxLiabilitiesInvestments`
+- `us-gaap:DeferredTaxLiabilitiesLeasingArrangements`
+- `us-gaap:DeferredTaxLiabilitiesOther`
+- `us-gaap:DeferredTaxLiabilitiesPrepaidExpenses`
+- `us-gaap:DeferredTaxLiabilitiesPropertyPlantAndEquipment`
+- `us-gaap:DeferredTaxLiabilitiesUnrealizedGainsOnTradingSecurities`
+- `us-gaap:DepositAssets`
+- `us-gaap:Depreciation`
+- `us-gaap:DepreciationPremisesAndEquipment`
+- `us-gaap:DerivativeAssetsLiabilitiesAtFairValueNet`
+- `us-gaap:DirectPremiumsEarned`
+- `us-gaap:DirectPremiumsEarnedPropertyAndCasualty`
+- `us-gaap:DirectPremiumsWritten`
+- `us-gaap:DividendsPayableCurrentAndNoncurrent`
+- `us-gaap:DividendsPreferredStockCash`
+- `us-gaap:EarlyRepaymentOfSubordinatedDebt`
+- `us-gaap:EarningsPerShareBasic`
+- `us-gaap:EarningsPerShareDiluted`
+- `us-gaap:EffectOfExchangeRateOnCashAndCashEquivalents`
+- `us-gaap:EffectOfExchangeRateOnCashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents`
+- `us-gaap:EffectiveIncomeTaxRateContinuingOperations`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationAtFederalStatutoryIncomeTaxRate`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationChangeInDeferredTaxAssetsValuationAllowance`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationNondeductibleExpense`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationNondeductibleExpenseImpairmentLosses`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationOtherAdjustments`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationOtherReconcilingItemsPercent`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationStateAndLocalIncomeTaxes`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationTaxCredits`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationTaxCreditsInvestment`
+- `us-gaap:EffectiveIncomeTaxRateReconciliationTaxExemptIncome`
+- `us-gaap:EquitySecuritiesFvNi`
+- `us-gaap:EquitySecuritiesFvNiCost`
+- `us-gaap:EquitySecuritiesFvNiGainLoss`
+- `us-gaap:EquitySecuritiesFvNiRealizedGain`
+- `us-gaap:EquitySecuritiesFvNiRealizedGainLoss`
+- `us-gaap:EquitySecuritiesFvNiRealizedLoss`
+- `us-gaap:EquitySecuritiesFvNiUnrealizedGainLoss`
+- `us-gaap:ExcessTaxBenefitFromShareBasedCompensationFinancingActivities`
+- `us-gaap:ExpenseRelatedToDistributionOrServicingAndUnderwritingFees`
+- `us-gaap:FairValueAssetsLevel1ToLevel2TransfersAmount`
+- `us-gaap:FairValueInvestmentsEntitiesThatCalculateNetAssetValuePerShareUnfundedCommittments`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetGainLossIncludedInEarnings`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetGainLossIncludedInEarnings1`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetGainLossIncludedInOtherComprehensiveIncome`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetGainLossIncludedInOtherComprehensiveIncomeLoss`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetPeriodIncreaseDecrease`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetPurchases`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetSales`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetSettlements`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetTransfersNet`
+- `us-gaap:FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetValue`
+- `us-gaap:FiniteLivedIntangibleAssetsAccumulatedAmortization`
+- `us-gaap:FiniteLivedIntangibleAssetsAmortizationExpenseNextTwelveMonths`
+- `us-gaap:FiniteLivedIntangibleAssetsAmortizationExpenseYearFive`
+- `us-gaap:FiniteLivedIntangibleAssetsAmortizationExpenseYearFour`
+- `us-gaap:FiniteLivedIntangibleAssetsAmortizationExpenseYearThree`
+- `us-gaap:FiniteLivedIntangibleAssetsAmortizationExpenseYearTwo`
+- `us-gaap:ForeignCurrencyCashFlowHedgeGainLossReclassifiedToEarningsNet`
+- `us-gaap:GainLossOnDerivativeInstrumentsNetPretax`
+- `us-gaap:GainsLossesOnExtinguishmentOfDebt`
+- `us-gaap:Goodwill`
+- `us-gaap:GoodwillAcquiredDuringPeriod`
+- `us-gaap:GoodwillImpairedAccumulatedImpairmentLoss`
+- `us-gaap:GoodwillImpairmentLoss`
+- `us-gaap:GoodwillOtherIncreaseDecrease`
+- `us-gaap:GrossInvestmentIncomeOperating`
+- `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`
+- `us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments`
+- `us-gaap:IncomeTaxExpenseBenefit`
+- `us-gaap:IncomeTaxReceivable`
+- `us-gaap:IncomeTaxReconciliationChangeInDeferredTaxAssetsValuationAllowance`
+- `us-gaap:IncomeTaxReconciliationIncomeTaxExpenseBenefitAtFederalStatutoryIncomeTaxRate`
+- `us-gaap:IncomeTaxReconciliationNondeductibleExpense`
+- `us-gaap:IncomeTaxReconciliationNondeductibleExpenseImpairmentLosses`
+- `us-gaap:IncomeTaxReconciliationOtherAdjustments`
+- `us-gaap:IncomeTaxReconciliationOtherReconcilingItems`
+- `us-gaap:IncomeTaxReconciliationStateAndLocalIncomeTaxes`
+- `us-gaap:IncomeTaxReconciliationTaxCredits`
+- `us-gaap:IncomeTaxReconciliationTaxCreditsInvestment`

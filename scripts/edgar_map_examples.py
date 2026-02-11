@@ -178,17 +178,21 @@ def build_stmt(us, map_stmt):
     metric_data = {}
     concept_used = {}
     concept_missing = []
+    candidate_presence = {}
     all_dates = set()
 
     for metric, candidates in map_stmt.items():
         chosen_series = {}
         used = None
+        present_candidates = []
         for concept in candidates:
             s = pick_series(us, concept)
             if s:
-                chosen_series = s
-                used = concept
-                break
+                present_candidates.append(concept)
+                if used is None:
+                    chosen_series = s
+                    used = concept
+        candidate_presence[metric] = present_candidates
         if used:
             metric_data[metric] = chosen_series
             concept_used[metric] = used
@@ -201,26 +205,43 @@ def build_stmt(us, map_stmt):
     for metric in sorted(metric_data):
         rows.append([metric] + [metric_data[metric].get(d) for d in dates])
 
-    return rows, concept_used, concept_missing
+    return rows, concept_used, concept_missing, candidate_presence
 
 
-def append_mapping_details(md_lines, statement_name, ordered_map, used_map, missing_pairs):
+def append_mapping_details(md_lines, statement_name, ordered_map, used_map, missing_pairs, candidate_presence):
     miss_by_metric = {m: cands for m, cands in missing_pairs}
     md_lines.append(f'### {statement_name} mapping detail')
     md_lines.append('')
     for metric, candidates in ordered_map.items():
+        present = candidate_presence.get(metric, [])
+        present_txt = ', '.join(f'`us-gaap:{c}`' for c in present) if present else 'none'
         if metric in used_map:
-            md_lines.append(f"- ✅ **{metric}** ← `us-gaap:{used_map[metric]}`")
+            md_lines.append(f"- ✅ **{metric}** ← `us-gaap:{used_map[metric]}` | also present: {present_txt}")
         else:
             tried = ', '.join(f'`us-gaap:{c}`' for c in miss_by_metric.get(metric, candidates))
-            md_lines.append(f"- ❌ **{metric}** ← EMPTY (tried: {tried})")
+            md_lines.append(f"- ❌ **{metric}** ← EMPTY (tried: {tried}) | present from candidates: {present_txt}")
     md_lines.append('')
+
+
+def list_present_statementish_concepts(us, limit=180):
+    keys = []
+    for concept in us.keys():
+        s = concept.lower()
+        if any(k in s for k in [
+            'revenue', 'income', 'expense', 'tax', 'earningspershare', 'interest', 'premium', 'claim',
+            'asset', 'liabil', 'equity', 'inventory', 'receivable', 'payable', 'goodwill', 'intangible', 'debt',
+            'cash', 'operatingactivities', 'investingactivities', 'financingactivities', 'depreciation', 'amortization',
+            'repurchase', 'issuance'
+        ]):
+            if pick_series(us, concept):
+                keys.append(concept)
+    return sorted(set(keys))[:limit]
 
 
 def main():
     ap = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[1]
-    ap.add_argument('--tickers', default='JPM,BRK-B')
+    ap.add_argument('--tickers', default='JPM,PGR')
     ap.add_argument('--db', default=str(root / 'db.sqlite3'))
     ap.add_argument('--cache', default=str(root / 'cached_financials_2.json'))
     ap.add_argument('--out-json', default=str(root / 'reports/data/edgar_mapped_examples.json'))
@@ -257,9 +278,9 @@ def main():
         company_class = classes.get(t, 'normal')
         template = TEMPLATES.get(company_class, TEMPLATES['normal'])
 
-        is_rows, is_used, is_missing = build_stmt(us, template['IS'])
-        bs_rows, bs_used, bs_missing = build_stmt(us, template['BS'])
-        cf_rows, cf_used, cf_missing = build_stmt(us, template['CF'])
+        is_rows, is_used, is_missing, is_presence = build_stmt(us, template['IS'])
+        bs_rows, bs_used, bs_missing, bs_presence = build_stmt(us, template['BS'])
+        cf_rows, cf_used, cf_missing, cf_presence = build_stmt(us, template['CF'])
 
         out['tickers'][t] = {
             'class': company_class,
@@ -268,6 +289,8 @@ def main():
             'statements': {'IS': is_rows, 'BS': bs_rows, 'CF': cf_rows},
             'used_concepts': {'IS': is_used, 'BS': bs_used, 'CF': cf_used},
             'missing_metrics': {'IS': is_missing, 'BS': bs_missing, 'CF': cf_missing},
+            'candidate_presence': {'IS': is_presence, 'BS': bs_presence, 'CF': cf_presence},
+            'present_statementish_us_gaap': list_present_statementish_concepts(us),
             'counts': {
                 'IS': {'mapped': len(is_used), 'total': len(template['IS'])},
                 'BS': {'mapped': len(bs_used), 'total': len(template['BS'])},
@@ -284,9 +307,19 @@ def main():
             '',
         ]
 
-        append_mapping_details(md, 'IS', template['IS'], is_used, is_missing)
-        append_mapping_details(md, 'BS', template['BS'], bs_used, bs_missing)
-        append_mapping_details(md, 'CF', template['CF'], cf_used, cf_missing)
+        append_mapping_details(md, 'IS', template['IS'], is_used, is_missing, is_presence)
+        append_mapping_details(md, 'BS', template['BS'], bs_used, bs_missing, bs_presence)
+        append_mapping_details(md, 'CF', template['CF'], cf_used, cf_missing, cf_presence)
+
+        present_statementish = list_present_statementish_concepts(us)
+        md.append('### Additional us-gaap items present (statement-ish, 10-K FY)')
+        md.append('')
+        if present_statementish:
+            for concept in present_statementish:
+                md.append(f"- `us-gaap:{concept}`")
+        else:
+            md.append('- none')
+        md.append('')
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
