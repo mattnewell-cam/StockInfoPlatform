@@ -127,7 +127,7 @@ def search_api(request):
 
 def _load_alert_type_names():
     base_dir = os.path.dirname(os.path.dirname(__file__))
-    csv_path = os.path.join(base_dir, "alert_types.csv")
+    csv_path = os.path.join(base_dir, "data", "alert_types.csv")
     names = []
     try:
         with open(csv_path, newline="", encoding="utf-8") as f:

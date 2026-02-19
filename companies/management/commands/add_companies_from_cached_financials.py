@@ -15,8 +15,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--tickers-csv',
             type=str,
-            default='tickers.csv',
-            help='Path to tickers CSV (default: tickers.csv)'
+            default='data/tickers.csv',
+            help='Path to tickers CSV (default: data/tickers.csv)'
         )
         parser.add_argument(
             '--default-exchange',

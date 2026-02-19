@@ -89,8 +89,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--file',
             type=str,
-            default='cached_financials_2.json',
-            help='Path to JSON file (default: cached_financials_2.json)'
+            default='data/cached_financials_2.json',
+            help='Path to JSON file (default: data/cached_financials_2.json)'
         )
         parser.add_argument(
             '--ticker',

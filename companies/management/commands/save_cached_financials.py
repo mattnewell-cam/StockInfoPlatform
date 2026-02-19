@@ -8,8 +8,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--file",
-            default="cached_financials_2.json",
-            help="Path to cached fiscal JSON (default: cached_financials_2.json)",
+            default="data/cached_financials_2.json",
+            help="Path to cached fiscal JSON (default: data/cached_financials_2.json)",
         )
         parser.add_argument(
             "--ticker",

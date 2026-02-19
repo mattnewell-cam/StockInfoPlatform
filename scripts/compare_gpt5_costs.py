@@ -219,7 +219,7 @@ def main():
         report_lines.append("")
         report_path.write_text("\n".join(report_lines) + "\n")
 
-    cache_path = BASE_DIR / "cached_summaries.json"
+    cache_path = BASE_DIR / "data" / "cached_summaries.json"
     if cache_path.exists():
         cache = json.loads(cache_path.read_text(encoding="utf-8"))
     else:

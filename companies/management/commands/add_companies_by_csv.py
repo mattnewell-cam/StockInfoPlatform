@@ -15,7 +15,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--tickers-csv",
             type=str,
-            default="tickers.csv",
+            default="data/tickers.csv",
             help="Path to CSV with ticker[,exchange] rows",
         )
         parser.add_argument(
