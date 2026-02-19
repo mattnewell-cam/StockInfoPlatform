@@ -1,0 +1,911 @@
+{
+  "tickers": {
+    "JPM": {
+      "class": "bank",
+      "filing_accession": "0000019617-25-000270",
+      "periods": {
+        "IS": "2024-12-31",
+        "BS": "2024-12-31",
+        "CF": "2024-12-31"
+      },
+      "mapped": {
+        "IS": {
+          "Net Interest Income": 92583000000.0,
+          "Income Before Provision for Income Taxes": 75081000000.0,
+          "Provision for Income Taxes": 16610000000.0,
+          "Consolidated Net Income": 58471000000.0,
+          "Basic EPS": 19.79,
+          "Diluted EPS": 19.75
+        },
+        "BS": {
+          "Cash and Cash Equivalents": 23372000000.0,
+          "Trading Assets": 637784000000.0,
+          "Trading Liabilities": 192883000000.0,
+          "Total Assets": 4002814000000.0,
+          "Total Liabilities": 3658056000000.0,
+          "Retained Earnings": 376166000000.0,
+          "Total Shareholders' Equity": 344758000000.0,
+          "Total Liabilities and Shareholders' Equity": 4002814000000.0
+        },
+        "CF": {
+          "Net Income": 58471000000.0,
+          "Depreciation & Amortization": 7938000000.0,
+          "Cash from Operating Activities": -42012000000.0,
+          "Cash from Investing Activities": -163403000000.0,
+          "Cash from Financing Activities": 63447000000.0,
+          "Repurchases of Common Shares": 18830000000.0
+        }
+      },
+      "details": {
+        "IS": [
+          {
+            "metric": "Net Interest Income",
+            "mapped": true,
+            "concept": "InterestIncomeExpenseNet",
+            "label": "Net interest income",
+            "value": 92583000000.0,
+            "candidates": [
+              "InterestIncomeExpenseNet",
+              "NetInterestIncome"
+            ]
+          },
+          {
+            "metric": "Interest Expense",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "InterestExpense"
+            ]
+          },
+          {
+            "metric": "Income Before Provision for Income Taxes",
+            "mapped": true,
+            "concept": "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+            "label": "Income/(loss) before income tax expense/(benefit)",
+            "value": 75081000000.0,
+            "candidates": [
+              "IncomeBeforeTax",
+              "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"
+            ]
+          },
+          {
+            "metric": "Provision for Income Taxes",
+            "mapped": true,
+            "concept": "IncomeTaxExpenseBenefit",
+            "label": "Income tax expense",
+            "value": 16610000000.0,
+            "candidates": [
+              "IncomeTaxExpenseBenefit"
+            ]
+          },
+          {
+            "metric": "Consolidated Net Income",
+            "mapped": true,
+            "concept": "NetIncomeLoss",
+            "label": "Net income/(loss)",
+            "value": 58471000000.0,
+            "candidates": [
+              "NetIncomeLoss"
+            ]
+          },
+          {
+            "metric": "Basic EPS",
+            "mapped": true,
+            "concept": "EarningsPerShareBasic",
+            "label": "Basic earnings per share (in dollars per share)",
+            "value": 19.79,
+            "candidates": [
+              "EarningsPerShareBasic"
+            ]
+          },
+          {
+            "metric": "Diluted EPS",
+            "mapped": true,
+            "concept": "EarningsPerShareDiluted",
+            "label": "Diluted earnings per share (in dollars per share)",
+            "value": 19.75,
+            "candidates": [
+              "EarningsPerShareDiluted"
+            ]
+          }
+        ],
+        "BS": [
+          {
+            "metric": "Cash and Cash Equivalents",
+            "mapped": true,
+            "concept": "CashAndDueFromBanks",
+            "label": "Cash and due from banks",
+            "value": 23372000000.0,
+            "candidates": [
+              "CashAndCashEquivalentsAtCarryingValue",
+              "CashAndDueFromBanks"
+            ]
+          },
+          {
+            "metric": "Trading Assets",
+            "mapped": true,
+            "concept": "TradingAssets",
+            "label": "Trading assets (included assets pledged of $136,070 and $128,994)",
+            "value": 637784000000.0,
+            "candidates": [
+              "TradingAssets"
+            ]
+          },
+          {
+            "metric": "Trading Liabilities",
+            "mapped": true,
+            "concept": "TradingLiabilities",
+            "label": "Trading liabilities",
+            "value": 192883000000.0,
+            "candidates": [
+              "TradingLiabilities"
+            ]
+          },
+          {
+            "metric": "Goodwill",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "Goodwill"
+            ]
+          },
+          {
+            "metric": "Net Intangible Assets",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "IntangibleAssetsNetExcludingGoodwill"
+            ]
+          },
+          {
+            "metric": "Total Assets",
+            "mapped": true,
+            "concept": "Assets",
+            "label": "Total assets",
+            "value": 4002814000000.0,
+            "candidates": [
+              "Assets"
+            ]
+          },
+          {
+            "metric": "Long-Term Debt",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "LongTermDebtNoncurrent",
+              "LongTermDebt"
+            ]
+          },
+          {
+            "metric": "Total Liabilities",
+            "mapped": true,
+            "concept": "Liabilities",
+            "label": "Total liabilities",
+            "value": 3658056000000.0,
+            "candidates": [
+              "Liabilities"
+            ]
+          },
+          {
+            "metric": "Retained Earnings",
+            "mapped": true,
+            "concept": "RetainedEarningsAccumulatedDeficit",
+            "label": "Retained earnings",
+            "value": 376166000000.0,
+            "candidates": [
+              "RetainedEarningsAccumulatedDeficit"
+            ]
+          },
+          {
+            "metric": "Total Shareholders' Equity",
+            "mapped": true,
+            "concept": "StockholdersEquity",
+            "label": "Total stockholders\u2019 equity",
+            "value": 344758000000.0,
+            "candidates": [
+              "StockholdersEquity",
+              "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
+            ]
+          },
+          {
+            "metric": "Total Liabilities and Shareholders' Equity",
+            "mapped": true,
+            "concept": "LiabilitiesAndStockholdersEquity",
+            "label": "Total liabilities and stockholders\u2019 equity",
+            "value": 4002814000000.0,
+            "candidates": [
+              "LiabilitiesAndStockholdersEquity"
+            ]
+          }
+        ],
+        "CF": [
+          {
+            "metric": "Net Income",
+            "mapped": true,
+            "concept": "NetIncomeLoss",
+            "label": "Net income",
+            "value": 58471000000.0,
+            "candidates": [
+              "NetIncomeLoss"
+            ]
+          },
+          {
+            "metric": "Depreciation & Amortization",
+            "mapped": true,
+            "concept": "DepreciationAmortizationAndAccretionNet",
+            "label": "Depreciation and amortization",
+            "value": 7938000000.0,
+            "candidates": [
+              "DepreciationDepletionAndAmortization",
+              "DepreciationAmortizationAndAccretionNet"
+            ]
+          },
+          {
+            "metric": "Cash from Operating Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInOperatingActivities",
+            "label": "Net cash (used in)/provided by operating activities",
+            "value": -42012000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInOperatingActivities"
+            ]
+          },
+          {
+            "metric": "Cash from Investing Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInInvestingActivities",
+            "label": "Net cash (used in)/provided by investing activities",
+            "value": -163403000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInInvestingActivities"
+            ]
+          },
+          {
+            "metric": "Cash from Financing Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInFinancingActivities",
+            "label": "Net cash provided by/(used in) financing activities",
+            "value": 63447000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInFinancingActivities"
+            ]
+          },
+          {
+            "metric": "Capital Expenditure",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "PaymentsToAcquirePropertyPlantAndEquipment"
+            ]
+          },
+          {
+            "metric": "Repurchases of Common Shares",
+            "mapped": true,
+            "concept": "PaymentsForRepurchaseOfCommonStock",
+            "label": "Treasury stock repurchased",
+            "value": 18830000000.0,
+            "candidates": [
+              "PaymentsForRepurchaseOfCommonStock"
+            ]
+          },
+          {
+            "metric": "Issuance of Common Shares",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "ProceedsFromIssuanceOfCommonStock"
+            ]
+          }
+        ]
+      },
+      "checks": {
+        "balance_sheet": {
+          "check": "assets = liabilities + equity",
+          "status": "pass",
+          "diff": 0.0,
+          "assets": 4002814000000.0,
+          "liabilities": 3658056000000.0,
+          "equity": 344758000000.0
+        },
+        "cashflow_bridge": {
+          "check": "cfo + cfi + cff = net change cash",
+          "status": "missing_inputs",
+          "diff": null
+        }
+      },
+      "statement_concepts_present": {
+        "IS": [
+          "AssetManagementFees",
+          "CommunicationsAndInformationTechnology",
+          "DebtSecuritiesAvailableForSaleRealizedGainLoss",
+          "EarningsPerShareBasic",
+          "EarningsPerShareDiluted",
+          "FeesAndCommissions1",
+          "FeesAndCommissionsCreditAndDebitCards1",
+          "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+          "IncomeTaxExpenseBenefit",
+          "InterestExpenseOperating",
+          "InterestIncomeExpenseNet",
+          "InterestIncomeOperating",
+          "InvestmentBankingRevenue",
+          "LaborAndRelatedExpense",
+          "LendingAndDepositRelatedFees",
+          "MarketingAndAdvertisingExpense",
+          "MortgageFeesAndRelatedIncome",
+          "NetIncomeLoss",
+          "NetIncomeLossAvailableToCommonStockholdersBasic",
+          "NetIncomeLossAvailableToCommonStockholdersDiluted",
+          "NoninterestExpense",
+          "NoninterestIncome",
+          "NoninterestIncomeOther",
+          "OccupancyNet",
+          "OtherNoninterestExpense",
+          "PrincipalTransactionsRevenue",
+          "ProfessionalAndContractServicesExpense",
+          "ProvisionForLoanLeaseAndOtherLosses",
+          "RevenuesNetOfInterestExpense",
+          "WeightedAverageNumberOfDilutedSharesOutstanding",
+          "WeightedAverageNumberOfSharesOutstandingBasic"
+        ],
+        "BS": [
+          "AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
+          "AccruedInterestAndAccountsReceivable",
+          "AccumulatedOtherComprehensiveIncomeLossNetOfTax",
+          "AdditionalPaidInCapitalCommonStock",
+          "Assets",
+          "BeneficialInterest",
+          "CashAndDueFromBanks",
+          "CommitmentsAndContingencies",
+          "CommonStockValue",
+          "DebtSecuritiesAvailableForSaleExcludingAccruedInterest",
+          "DebtSecuritiesHeldToMaturityExcludingAccruedInterestAfterAllowanceForCreditLoss",
+          "DebtSecuritiesNetCarryingAmount",
+          "Deposits",
+          "FederalFundsPurchasedAndSecuritiesSoldUnderAgreementsToRepurchase",
+          "FederalFundsSoldAndSecuritiesPurchasedUnderAgreementsToResell",
+          "FinancingReceivableAllowanceForCreditLossExcludingAccruedInterest",
+          "FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss",
+          "FinancingReceivableExcludingAccruedInterestBeforeAllowanceForCreditLossesNetOfDeferredIncome",
+          "GoodwillServicingAssetsatFairValueandOtherIntangibleAssets",
+          "InterestBearingDepositsInBanks",
+          "Liabilities",
+          "LiabilitiesAndStockholdersEquity",
+          "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",
+          "OtherAssets",
+          "OtherLiabilities",
+          "PreferredStockIncludingAdditionalPaidInCapitalNetOfDiscount",
+          "PropertyPlantAndEquipmentAndOperatingLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization",
+          "RetainedEarningsAccumulatedDeficit",
+          "SecuritiesBorrowed",
+          "ShortTermBorrowings",
+          "StockholdersEquity",
+          "TradingAssets",
+          "TradingLiabilities",
+          "TreasuryStockCommonValue"
+        ],
+        "CF": [
+          "BusinessCombinationBargainPurchaseGainRecognizedAmount",
+          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+          "DeferredIncomeTaxExpenseBenefit",
+          "DepreciationAmortizationAndAccretionNet",
+          "EffectOfExchangeRateOnCashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+          "EquitySecuritiesGainLossOnShareExchange",
+          "IncomeTaxesPaidNet",
+          "IncreaseDecreaseInAccountsPayableAndOtherLiabilities",
+          "IncreaseDecreaseInAccruedInterestsAndAccountsReceivable",
+          "IncreaseDecreaseInBeneficialInterestsIssuedByConsolidatedVariableInterestEntities",
+          "IncreaseDecreaseInCashCollateralForBorrowedSecurities",
+          "IncreaseDecreaseInDeposits",
+          "IncreaseDecreaseInFederalFundsPurchasedAndSecuritiesSoldUnderAgreementsToRepurchaseNet",
+          "IncreaseDecreaseInFinancialInstrumentsUsedInOperatingActivities",
+          "IncreaseDecreaseInPrepaidDeferredExpenseAndOtherAssets",
+          "IncreaseDecreaseInTradingLiabilities",
+          "InterestPaidNet",
+          "NetCashProvidedByUsedInFinancingActivities",
+          "NetCashProvidedByUsedInInvestingActivities",
+          "NetCashProvidedByUsedInOperatingActivities",
+          "NetIncomeLoss",
+          "OtherNoncashIncomeExpense",
+          "OtherOperatingActivitiesCashFlowStatement",
+          "PaymentsForOriginationAndPurchasesOfLoansHeldForSale",
+          "PaymentsForProceedsFromOtherInvestingActivities",
+          "PaymentsForRepurchaseOfCommonStock",
+          "PaymentsForRepurchaseOfRedeemablePreferredStock",
+          "PaymentsOfDividends",
+          "PaymentsToAcquireAvailableForSaleSecuritiesDebt",
+          "PaymentsToAcquireBusinessesNetOfCashAcquired",
+          "PaymentsToAcquireHeldToMaturitySecurities",
+          "ProceedsFromIssuanceOfLongTermDebtAndCapitalSecuritiesNet",
+          "ProceedsFromIssuanceOfPreferredStockAndPreferenceStock",
+          "ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
+          "ProceedsFromMaturitiesPrepaymentsAndCallsOfHeldToMaturitySecurities",
+          "ProceedsFromPaymentsForFederalFundsSoldAndSecuritiesPurchasedUnderAgreementsToResellNet",
+          "ProceedsFromPaymentsForOtherFinancingActivities",
+          "ProceedsFromPaymentsForOtherLoansAndLeases",
+          "ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
+          "ProceedsFromSaleOfFinanceReceivables",
+          "ProceedsFromSalesSecuritizationsAndPaydownsOfLoansHeldForSale",
+          "ProceedsFromShortTermDebt",
+          "ProvisionForLoanLeaseAndOtherLosses",
+          "RepaymentsOfLongTermDebtAndCapitalSecurities",
+          "RepaymentsOfShortTermDebt"
+        ]
+      }
+    },
+    "PGR": {
+      "class": "insurer",
+      "filing_accession": "0000080661-25-000007",
+      "periods": {
+        "IS": "2024-12-31",
+        "BS": "2024-12-31",
+        "CF": "2024-12-31"
+      },
+      "mapped": {
+        "IS": {
+          "Insurance Benefits & Claims": 49060000000.0,
+          "Total Revenues": 75372000000.0,
+          "Income Before Provision for Income Taxes": 10713000000.0,
+          "Provision for Income Taxes": 2233000000.0,
+          "Consolidated Net Income": 8480000000.0,
+          "Basic EPS": 14.45,
+          "Diluted EPS": 14.4
+        },
+        "BS": {
+          "Total Investments": 80250000000.0,
+          "Deferred Acquisition Costs": 1961000000.0,
+          "Total Assets": 105745000000.0,
+          "Unearned Premiums": 23858000000.0,
+          "Total Liabilities": 80154000000.0,
+          "Total Shareholders' Equity": 25591000000.0,
+          "Total Liabilities and Shareholders' Equity": 105745000000.0
+        },
+        "CF": {
+          "Net Income": 8480000000.0,
+          "Cash from Operating Activities": 15119000000.0,
+          "Cash from Investing Activities": -13749000000.0,
+          "Cash from Financing Activities": -1316000000.0,
+          "Capital Expenditure": 285000000.0
+        }
+      },
+      "details": {
+        "IS": [
+          {
+            "metric": "Net Premiums Earned",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "PremiumsEarnedNet",
+              "Premiums"
+            ]
+          },
+          {
+            "metric": "Insurance Benefits & Claims",
+            "mapped": true,
+            "concept": "PolicyholderBenefitsAndClaimsIncurredNet",
+            "label": "Losses and loss adjustment expenses",
+            "value": 49060000000.0,
+            "candidates": [
+              "PolicyholderBenefitsAndClaimsIncurredNet",
+              "PolicyholderBenefitsAndClaimsIncurred"
+            ]
+          },
+          {
+            "metric": "Investment Income",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "InvestmentIncomeInterestAndDividend"
+            ]
+          },
+          {
+            "metric": "Total Revenues",
+            "mapped": true,
+            "concept": "Revenues",
+            "label": "Total revenues",
+            "value": 75372000000.0,
+            "candidates": [
+              "Revenues",
+              "SalesRevenueNet"
+            ]
+          },
+          {
+            "metric": "Operating Profit",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "OperatingIncomeLoss"
+            ]
+          },
+          {
+            "metric": "Income Before Provision for Income Taxes",
+            "mapped": true,
+            "concept": "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+            "label": "Income before income taxes",
+            "value": 10713000000.0,
+            "candidates": [
+              "IncomeBeforeTax",
+              "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"
+            ]
+          },
+          {
+            "metric": "Provision for Income Taxes",
+            "mapped": true,
+            "concept": "IncomeTaxExpenseBenefit",
+            "label": "Provision for income taxes",
+            "value": 2233000000.0,
+            "candidates": [
+              "IncomeTaxExpenseBenefit"
+            ]
+          },
+          {
+            "metric": "Consolidated Net Income",
+            "mapped": true,
+            "concept": "NetIncomeLoss",
+            "label": "Net income",
+            "value": 8480000000.0,
+            "candidates": [
+              "NetIncomeLoss"
+            ]
+          },
+          {
+            "metric": "Basic EPS",
+            "mapped": true,
+            "concept": "EarningsPerShareBasic",
+            "label": "Basic: Earnings per common share (usd per share)",
+            "value": 14.45,
+            "candidates": [
+              "EarningsPerShareBasic"
+            ]
+          },
+          {
+            "metric": "Diluted EPS",
+            "mapped": true,
+            "concept": "EarningsPerShareDiluted",
+            "label": "Diluted: Earnings per common share (usd per share)",
+            "value": 14.4,
+            "candidates": [
+              "EarningsPerShareDiluted"
+            ]
+          }
+        ],
+        "BS": [
+          {
+            "metric": "Cash and Cash Equivalents",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "CashAndCashEquivalentsAtCarryingValue"
+            ]
+          },
+          {
+            "metric": "Debt Securities",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "DebtSecuritiesAvailableForSaleAmortizedCostBasis"
+            ]
+          },
+          {
+            "metric": "Total Investments",
+            "mapped": true,
+            "concept": "Investments",
+            "label": "Total investments",
+            "value": 80250000000.0,
+            "candidates": [
+              "Investments"
+            ]
+          },
+          {
+            "metric": "Reinsurance Contract Assets",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "ReinsuranceRecoverables"
+            ]
+          },
+          {
+            "metric": "Deferred Acquisition Costs",
+            "mapped": true,
+            "concept": "DeferredPolicyAcquisitionCosts",
+            "label": "Deferred acquisition costs",
+            "value": 1961000000.0,
+            "candidates": [
+              "DeferredPolicyAcquisitionCosts"
+            ]
+          },
+          {
+            "metric": "Goodwill",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "Goodwill"
+            ]
+          },
+          {
+            "metric": "Total Assets",
+            "mapped": true,
+            "concept": "Assets",
+            "label": "Total assets",
+            "value": 105745000000.0,
+            "candidates": [
+              "Assets"
+            ]
+          },
+          {
+            "metric": "Unearned Premiums",
+            "mapped": true,
+            "concept": "UnearnedPremiums",
+            "label": "Unearned premiums",
+            "value": 23858000000.0,
+            "candidates": [
+              "UnearnedPremiums"
+            ]
+          },
+          {
+            "metric": "Claims Reserves",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "PolicyholderBenefitsAndClaimsLiability"
+            ]
+          },
+          {
+            "metric": "Total Liabilities",
+            "mapped": true,
+            "concept": "Liabilities",
+            "label": "Total liabilities",
+            "value": 80154000000.0,
+            "candidates": [
+              "Liabilities"
+            ]
+          },
+          {
+            "metric": "Total Shareholders' Equity",
+            "mapped": true,
+            "concept": "StockholdersEquity",
+            "label": "Total shareholders\u2019 equity",
+            "value": 25591000000.0,
+            "candidates": [
+              "StockholdersEquity",
+              "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
+            ]
+          },
+          {
+            "metric": "Total Liabilities and Shareholders' Equity",
+            "mapped": true,
+            "concept": "LiabilitiesAndStockholdersEquity",
+            "label": "Total liabilities and shareholders\u2019 equity",
+            "value": 105745000000.0,
+            "candidates": [
+              "LiabilitiesAndStockholdersEquity"
+            ]
+          }
+        ],
+        "CF": [
+          {
+            "metric": "Net Income",
+            "mapped": true,
+            "concept": "NetIncomeLoss",
+            "label": "Net income",
+            "value": 8480000000.0,
+            "candidates": [
+              "NetIncomeLoss"
+            ]
+          },
+          {
+            "metric": "Cash from Operating Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInOperatingActivities",
+            "label": "Net cash provided by operating activities",
+            "value": 15119000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInOperatingActivities"
+            ]
+          },
+          {
+            "metric": "Cash from Investing Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInInvestingActivities",
+            "label": "Net cash used in investing activities",
+            "value": -13749000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInInvestingActivities"
+            ]
+          },
+          {
+            "metric": "Cash from Financing Activities",
+            "mapped": true,
+            "concept": "NetCashProvidedByUsedInFinancingActivities",
+            "label": "Net cash provided by (used in) financing activities",
+            "value": -1316000000.0,
+            "candidates": [
+              "NetCashProvidedByUsedInFinancingActivities"
+            ]
+          },
+          {
+            "metric": "Capital Expenditure",
+            "mapped": true,
+            "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+            "label": "Purchases of property and equipment",
+            "value": 285000000.0,
+            "candidates": [
+              "PaymentsToAcquirePropertyPlantAndEquipment"
+            ]
+          },
+          {
+            "metric": "Repurchases of Common Shares",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "PaymentsForRepurchaseOfCommonStock"
+            ]
+          },
+          {
+            "metric": "Issuance of Common Shares",
+            "mapped": false,
+            "concept": null,
+            "label": null,
+            "value": null,
+            "candidates": [
+              "ProceedsFromIssuanceOfCommonStock"
+            ]
+          }
+        ]
+      },
+      "checks": {
+        "balance_sheet": {
+          "check": "assets = liabilities + equity",
+          "status": "pass",
+          "diff": 0.0,
+          "assets": 105745000000.0,
+          "liabilities": 80154000000.0,
+          "equity": 25591000000.0
+        },
+        "cashflow_bridge": {
+          "check": "cfo + cfi + cff = net change cash",
+          "status": "missing_inputs",
+          "diff": null
+        }
+      },
+      "statement_concepts_present": {
+        "IS": [
+          "BenefitsLossesAndExpenses",
+          "ComprehensiveIncomeNetOfTax",
+          "DebtAndEquitySecuritiesGainLoss",
+          "DebtAndEquitySecuritiesRealizedGainLoss",
+          "DebtAndEquitySecuritiesUnrealizedGainLoss",
+          "DeferredPolicyAcquisitionCostAmortizationExpense",
+          "EarningsPerShareBasic",
+          "EarningsPerShareDiluted",
+          "FeesAndOtherRevenues",
+          "GoodwillImpairmentLoss",
+          "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+          "IncomeTaxExpenseBenefit",
+          "InterestAndDividendIncomeOperating",
+          "InterestExpenseDebt",
+          "InvestmentIncomeInvestmentExpense",
+          "NetIncomeLoss",
+          "NetIncomeLossAvailableToCommonStockholdersBasic",
+          "NonInsuranceServiceExpenses",
+          "NonInsuranceServiceRevenues",
+          "OtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+          "OtherUnderwritingExpense",
+          "PolicyholderBenefitsAndClaimsIncurredNet",
+          "PreferredStockDividendsIncomeStatementImpact",
+          "PremiumsEarnedNetPropertyAndCasualty",
+          "Revenues",
+          "TotalOtherThanTemporaryImpairmentLoss",
+          "WeightedAverageNumberDilutedSharesOutstandingAdjustment",
+          "WeightedAverageNumberOfDilutedSharesOutstanding",
+          "WeightedAverageNumberOfSharesOutstandingBasic"
+        ],
+        "BS": [
+          "AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
+          "AccruedInvestmentIncomeReceivable",
+          "AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+          "AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax",
+          "AccumulatedOtherComprehensiveIncomeLossNetOfTax",
+          "AdditionalPaidInCapitalCommonStock",
+          "AociLossCashFlowHedgeCumulativeGainLossAfterTax",
+          "Assets",
+          "AvailableForSaleSecuritiesDebtSecurities",
+          "Cash",
+          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+          "CommonStockValueOutstanding",
+          "DebtLongtermAndShorttermCombinedAmount",
+          "DebtSecuritiesAvailableforsaleFixedMaturities",
+          "DeferredPolicyAcquisitionCosts",
+          "DeferredTaxAssetsFederalTax",
+          "EquitySecuritiesFVNICommonEquities",
+          "EquitySecuritiesFVNINonredeemablePreferredStock",
+          "EquitySecuritiesFvNi",
+          "Investments",
+          "Liabilities",
+          "LiabilitiesAndStockholdersEquity",
+          "LiabilityForClaimsAndClaimsAdjustmentExpense",
+          "OtherAssets",
+          "PreferredStockValueOutstanding",
+          "PremiumsReceivableAtCarryingValue",
+          "PrepaidReinsurancePremiums",
+          "PropertyPlantAndEquipmentNet",
+          "ReinsuranceRecoverablesOnPaidAndUnpaidLosses",
+          "RestrictedCashAndCashEquivalents",
+          "RetainedEarningsAccumulatedDeficit",
+          "ShortTermInvestments",
+          "StockholdersEquity",
+          "UnearnedPremiums"
+        ],
+        "CF": [
+          "AccretionAmortizationOfDiscountsAndPremiumsInvestments",
+          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+          "Depreciation",
+          "GainLossOnSaleOfPropertyPlantEquipment",
+          "GoodwillImpairmentLoss",
+          "IncreaseDecreaseInAccountsPayableAndAccruedLiabilities",
+          "IncreaseDecreaseInDeferredPolicyAcquisitionCosts",
+          "IncreaseDecreaseInIncomeTaxes",
+          "IncreaseDecreaseInLiabilityForClaimsAndClaimsAdjustmentExpenseReserve",
+          "IncreaseDecreaseInOtherOperatingCapitalNet",
+          "IncreaseDecreaseInPremiumsReceivable",
+          "IncreaseDecreaseInPrepaidReinsurancePremiums",
+          "IncreaseDecreaseInReinsuranceRecoverable",
+          "IncreaseDecreaseInUnearnedPremiums",
+          "NetCashProvidedByUsedInFinancingActivities",
+          "NetCashProvidedByUsedInInvestingActivities",
+          "NetCashProvidedByUsedInOperatingActivities",
+          "NetIncomeLoss",
+          "PaymentsForProceedsFromShortTermInvestments",
+          "PaymentsForRepurchaseOfPreferredStockAndPreferenceStock",
+          "PaymentsOfDividendsCommonStock",
+          "PaymentsOfDividendsPreferredStockAndPreferenceStock",
+          "PaymentsToAcquireAvailableForSaleSecuritiesDebt",
+          "PaymentsToAcquireEquitySecuritiesFvNi",
+          "PaymentsToAcquirePropertyPlantAndEquipment",
+          "PaymentsforRepurchaseofCommonStockforRestrictedStockTaxLiabilities",
+          "PaymentsforRepurchaseofCommonStockintheOpenMarket",
+          "ProceedsFromIssuanceOfDebt",
+          "ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
+          "ProceedsFromMaturitiesPrepaymentsAndCallsOfEquitySecuritiesFVNI",
+          "ProceedsFromPayablesToBrokerDealersInvestingActivities",
+          "ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
+          "ProceedsFromSaleOfEquitySecuritiesFvNi",
+          "ProceedsFromSaleOfPropertyPlantAndEquipment",
+          "RealizedInvestmentGainsLosses",
+          "RestrictedStockExpense"
+        ]
+      }
+    }
+  }
+}

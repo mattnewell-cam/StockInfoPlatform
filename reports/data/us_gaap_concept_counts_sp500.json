@@ -1,0 +1,20 @@
+{
+  "universe": "S&P universe from data/sp500_tickers_fiscal_exchange.csv",
+  "universe_tickers": 503,
+  "tickers_with_cik": 503,
+  "fetch_failures": 0,
+  "us_gaap_unique_all": 8433,
+  "us_gaap_unique_with_10k_fy_data": 8100,
+  "split_all_conservative": {
+    "CF": 1070,
+    "IS": 1972,
+    "OTHER": 3038,
+    "BS": 2353
+  },
+  "split_with_10k_fy_data_conservative": {
+    "CF": 1040,
+    "IS": 1903,
+    "OTHER": 2894,
+    "BS": 2263
+  }
+}
