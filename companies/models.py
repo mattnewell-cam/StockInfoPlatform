@@ -121,6 +121,51 @@ class Follow(models.Model):
         return f"{self.user.name} -> {self.company.ticker} ({self.company.name})"
 
 
+class AlertPreference(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="alert_preferences")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="alert_preferences")
+    alert_type = models.CharField(max_length=120)
+    enabled = models.BooleanField(default=True)
+    in_app = models.BooleanField(default=True)
+    email = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "company", "alert_type"], name="uniq_user_company_alert_type")
+        ]
+        indexes = [
+            models.Index(fields=["user", "company"]),
+            models.Index(fields=["user", "enabled"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} {self.company.ticker} {self.alert_type}"
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    company = models.ForeignKey(Company, null=True, blank=True, on_delete=models.CASCADE, related_name="notifications")
+    kind = models.CharField(max_length=80, default="system")
+    title = models.CharField(max_length=255)
+    body = models.TextField(blank=True, default="")
+    payload = models.JSONField(blank=True, default=dict)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["user", "read_at"]),
+            models.Index(fields=["company", "-created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username}: {self.title}"
+
+
 class Filing(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="filings")
     filing_type = models.CharField(max_length=50)

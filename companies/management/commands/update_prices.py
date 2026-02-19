@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company, StockPrice
+from companies.utils import yfinance_symbol
 import yfinance as yf
 import pandas as pd
 from datetime import date, timedelta
@@ -71,9 +72,7 @@ class Command(BaseCommand):
                 time.sleep(self.delay)
 
     def fetch_prices(self, company, full_refresh):
-        # Replace dots with hyphens for yfinance (e.g., BT.A -> BT-A)
-        yf_symbol = company.ticker.replace('.', '-')
-        yf_full = f"{yf_symbol}.L"
+        yf_full = yfinance_symbol(company.ticker, company.exchange)
 
         # Check if we need to fetch
         last_price = StockPrice.objects.filter(company=company).order_by('-date').first()

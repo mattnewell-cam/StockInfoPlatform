@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company
+from companies.utils import yfinance_symbol
 import yfinance as yf
 import time
 
@@ -30,7 +31,7 @@ class Command(BaseCommand):
 
         for i, company in enumerate(companies, 1):
             try:
-                yf_ticker = yf.Ticker(f"{company.ticker}.L")
+                yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
                 info = yf_ticker.get_info()
 
                 market_cap = info.get("marketCap")

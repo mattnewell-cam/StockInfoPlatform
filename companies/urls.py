@@ -4,7 +4,12 @@ from . import views
 app_name = 'companies'
 
 urlpatterns = [
+    path("notifications/", views.notification_list, name="notifications"),
+    path("notifications/<int:notification_id>/read/", views.notification_mark_read, name="notification-mark-read"),
     path("<str:ticker>/", views.CompanyDetailView.as_view(), name="company-detail"),
+    path("<str:ticker>/follow/", views.follow_company, name="follow-company"),
+    path("<str:ticker>/unfollow/", views.unfollow_company, name="unfollow-company"),
+    path("<str:ticker>/alerts/", views.alert_preferences, name="alert-preferences"),
     path("<str:ticker>/prices/<str:period>/", views.intraday_prices, name="intraday-prices"),
     path("<str:ticker>/notes/add/", views.add_note, name="add-note"),
     path("<str:ticker>/news/", views.regulatory_newsfeed, name="regulatory-newsfeed"),

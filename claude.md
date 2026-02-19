@@ -12,7 +12,7 @@ TrackStack is a Django web app for small-cap investors to search companies and v
 - Django 6.0
 - SQLite (db.sqlite3)
 - yfinance (company metadata + pricing)
-- Selenium (QuickFS scraping)
+- Selenium (Fiscal scraping)
 - OpenAI API (summaries script + in-app chat)
 - python-dotenv (loads .env)
 - Requests (Brevo email API)
@@ -35,9 +35,22 @@ companies/              # Main Django app
     companies/notes_home.html
     companies/notes_company.html
     registration/*.html
+data/                   # CSV + JSON data files (gitignored)
+  tickers.csv
+  cached_financials_2.json
+  cached_summaries.json
+  alert_types.csv
+  financials_failed.csv
+  sp500_tickers_fiscal_exchange.csv
+  lse_all_tickers.csv
+  ftse_100_tickers.csv
+  ticker_exchanges.csv
+  us_seed_tickers.csv
 scripts/                # Standalone scripts (not Django)
-  pull_financials.py     # QuickFS scrape -> cached_financials.json
-  generate_AI_summaries.py # OpenAI -> cached_summaries.json
+  pull_financials_fiscal.py     # Fiscal scrape -> data/cached_financials_2.json
+  generate_AI_summaries.py      # OpenAI -> data/cached_summaries.json
+  import_to_postgres.py         # Legacy Postgres importer
+  run_comparison.py             # Model comparison runner
 ```
 
 ## How to Run
@@ -54,10 +67,10 @@ python manage.py update_prices --ticker TICKER --full --years 10
 
 ## Data Pipeline
 
-1. `tickers.csv` -> `add_companies_by_csv` (yfinance metadata)
-2. `scripts/pull_financials.py` -> `cached_financials.json`
+1. `data/tickers.csv` -> `add_companies_by_csv` (yfinance metadata)
+2. `scripts/pull_financials_fiscal.py` -> `data/cached_financials_2.json`
 3. `save_cached_financials` -> Financial rows in SQLite
-4. `scripts/generate_AI_summaries.py` -> `cached_summaries.json`
+4. `scripts/generate_AI_summaries.py` -> `data/cached_summaries.json`
 5. `save_cached_summaries` -> Company `description`, `special_sits`, `writeups`
 6. `update_prices` -> StockPrice history; intraday 1D/5D uses yfinance in views
 
@@ -84,12 +97,10 @@ Do not modify these (personal/dev use only):
 - `ToDo.txt`
 - `prompt_versions.txt`
 - `test.py`
-- `tickers.csv` (dev data)
-- `cached_financials.json` (dev data)
-- `cached_summaries.json` (dev data)
+- `data/` (all data files — gitignored)
 - `db.sqlite3` (local dev DB)
 
 ## Notes
 
-- QuickFS scraping is slow and uses Selenium with credentials in `scripts/pull_financials.py`.
+- Fiscal scraping is Selenium-based and can be slow; use cached imports for most workflows.
 - AI summary generation costs money (OpenAI API) — minimize unnecessary calls.

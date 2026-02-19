@@ -1,24 +1,116 @@
 from django.shortcuts import render, redirect
 from django.views.generic import DetailView
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth import login, logout as auth_logout
 from django.contrib import messages
 from collections import defaultdict
+import csv
 import json
 import yfinance as yf
 import requests
 
 import os
-from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen
-from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql
+from companies.models import Company, Financial, StockPrice, Note, EmailVerificationToken, SavedScreen, Follow, AlertPreference, Notification
+from companies.utils import send_verification_email, execute_screener_query, generate_screener_sql, yfinance_symbol
 from django.db.models import Q
 from django.utils import timezone
 from django.db.models import Count, Q as DQ
 
 from companies.models import DiscussionThread, DiscussionMessage, ChatSession, ChatMessage, NoteCompany
+
+
+ROBOTS_TXT = """\
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: AI2Bot
+Disallow: /
+
+User-agent: Ai2Bot-Dolma
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: Timpibot
+Disallow: /
+
+User-agent: VelenpublicBot
+Disallow: /
+
+User-agent: Webzio-Extended
+Disallow: /
+
+User-agent: iaskspider
+Disallow: /
+
+User-agent: Scrapy
+Disallow: /
+
+User-agent: *
+Allow: /
+"""
+
+
+def robots_txt(request):
+    return HttpResponse(ROBOTS_TXT, content_type="text/plain")
 
 
 def home(request):
@@ -31,6 +123,149 @@ def search_api(request):
         return JsonResponse([], safe=False)
     results = Company.objects.filter(Q(name__icontains=q) | Q(ticker__icontains=q))[:10]
     return JsonResponse([{'ticker': c.ticker, 'name': c.name} for c in results], safe=False)
+
+
+def _load_alert_type_names():
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    csv_path = os.path.join(base_dir, "data", "alert_types.csv")
+    names = []
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if not row:
+                    continue
+                value = (row[0] or "").strip()
+                if value and value.lower() != "always know":
+                    names.append(value)
+    except Exception:
+        return []
+    return names
+
+
+@login_required
+@require_POST
+def follow_company(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    follow, created = Follow.objects.get_or_create(user=request.user, company=company)
+
+    if created:
+        Notification.objects.create(
+            user=request.user,
+            company=company,
+            kind="follow",
+            title=f"Following {company.ticker}",
+            body=f"You'll receive alerts for {company.name or company.ticker} once rules are enabled.",
+            payload={"ticker": company.ticker},
+        )
+
+    return JsonResponse({"ok": True, "following": True})
+
+
+@login_required
+@require_POST
+def unfollow_company(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    Follow.objects.filter(user=request.user, company=company).delete()
+    AlertPreference.objects.filter(user=request.user, company=company).delete()
+    return JsonResponse({"ok": True, "following": False})
+
+
+@login_required
+def notification_list(request):
+    limit = min(max(int(request.GET.get("limit", 50)), 1), 200)
+    qs = Notification.objects.filter(user=request.user).select_related("company")[:limit]
+    unread_count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+    return JsonResponse({
+        "unread_count": unread_count,
+        "notifications": [
+            {
+                "id": n.id,
+                "kind": n.kind,
+                "title": n.title,
+                "body": n.body,
+                "ticker": n.company.ticker if n.company else "",
+                "read": n.read_at is not None,
+                "created_at": n.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            for n in qs
+        ],
+    })
+
+
+@login_required
+@require_POST
+def notification_mark_read(request, notification_id):
+    try:
+        n = Notification.objects.get(id=notification_id, user=request.user)
+    except Notification.DoesNotExist:
+        return JsonResponse({"error": "Notification not found"}, status=404)
+
+    if n.read_at is None:
+        n.read_at = timezone.now()
+        n.save(update_fields=["read_at"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def alert_preferences(request, ticker):
+    try:
+        company = Company.objects.get(ticker=ticker)
+    except Company.DoesNotExist:
+        return JsonResponse({"error": "Company not found"}, status=404)
+
+    if request.method == "GET":
+        prefs = AlertPreference.objects.filter(user=request.user, company=company).order_by("alert_type")
+        return JsonResponse({
+            "ticker": company.ticker,
+            "available_types": _load_alert_type_names(),
+            "preferences": [
+                {
+                    "id": p.id,
+                    "alert_type": p.alert_type,
+                    "enabled": p.enabled,
+                    "in_app": p.in_app,
+                    "email": p.email,
+                }
+                for p in prefs
+            ],
+        })
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        entries = data.get("preferences", [])
+        if not isinstance(entries, list):
+            return JsonResponse({"error": "preferences must be a list"}, status=400)
+
+        for entry in entries:
+            alert_type = (entry.get("alert_type") or "").strip()
+            if not alert_type:
+                continue
+            pref, _ = AlertPreference.objects.get_or_create(
+                user=request.user,
+                company=company,
+                alert_type=alert_type,
+            )
+            pref.enabled = bool(entry.get("enabled", True))
+            pref.in_app = bool(entry.get("in_app", True))
+            pref.email = bool(entry.get("email", False))
+            pref.save(update_fields=["enabled", "in_app", "email", "updated_at"])
+
+        return JsonResponse({"ok": True})
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 def newsfeed_api(request):
@@ -654,12 +889,6 @@ def pivot_items(items, metrics=None, combine=None, rename=None):
     return {"dates": dates, "rows": rows}
 
 
-def is_qfs_data(items):
-    """Check if the financial data is from QuickFS (has 'Revenue' metric)."""
-    metrics = {m for m, _, _ in items}
-    return "Revenue" in metrics
-
-
 class CompanyDetailView(DetailView):
     model = Company
     template_name = "companies/company_detail.html"
@@ -678,25 +907,14 @@ class CompanyDetailView(DetailView):
         for st, m, d, v in items:
             buckets[st].append((m, d, v))
 
-        # Check if this is QFS data (has "Revenue") or Fiscal data
-        all_items = buckets["IS"] + buckets["BS"] + buckets["CF"]
-        if is_qfs_data(all_items):
-            # Use predefined QFS metric order
-            ctx["IS_table"] = pivot_items(buckets["IS"], METRICS_IS)
-            ctx["BS_table"] = pivot_items(
-                buckets["BS"], METRICS_BS,
-                combine=QFS_BS_COMBINE, rename=QFS_BS_RENAME,
-            )
-            ctx["CF_table"] = pivot_items(buckets["CF"], METRICS_CF)
-        else:
-            # Transform Fiscal data for display (renames, drops, combines, exceptional items)
-            is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
-            bs_raw = preprocess_fiscal_bs(buckets["BS"])
-            bs_items, _ = transform_fiscal_items(bs_raw)
-            cf_items, _ = transform_fiscal_items(buckets["CF"])
-            ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
-            ctx["BS_table"] = pivot_fiscal_items(bs_items)
-            ctx["CF_table"] = pivot_fiscal_items(cf_items)
+        # Fiscal-only pipeline: transform for display (renames, drops, combines, exceptional items)
+        is_items, is_exceptional = transform_fiscal_items(buckets["IS"])
+        bs_raw = preprocess_fiscal_bs(buckets["BS"])
+        bs_items, _ = transform_fiscal_items(bs_raw)
+        cf_items, _ = transform_fiscal_items(buckets["CF"])
+        ctx["IS_table"] = pivot_fiscal_items(is_items, is_exceptional)
+        ctx["BS_table"] = pivot_fiscal_items(bs_items)
+        ctx["CF_table"] = pivot_fiscal_items(cf_items)
 
         # Price data for chart
         prices = StockPrice.objects.filter(company=self.object).order_by('date')
@@ -1068,9 +1286,7 @@ def intraday_prices(request, ticker, period):
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
-    # Replace dots with hyphens for yfinance (e.g., BT.A -> BT-A)
-    yf_symbol = ticker.replace('.', '-')
-    yf_ticker = yf.Ticker(f"{yf_symbol}.L")
+    yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
 
     # Map period to yfinance parameters
     period_config = {
