@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from companies.models import Company
+from companies.utils import yfinance_symbol
 import yfinance as yf
 import signal
 import time
@@ -60,7 +61,7 @@ class Command(BaseCommand):
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(60)
 
-                yf_ticker = yf.Ticker(f"{company.ticker}.L")
+                yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
                 info = yf_ticker.get_info()
 
                 signal.alarm(0)  # Cancel the alarm

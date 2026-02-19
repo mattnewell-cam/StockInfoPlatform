@@ -18,11 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 
-from companies.views import signup, verify_email, home, search_api, logout_view
+from companies.views import signup, verify_email, home, search_api, logout_view, robots_txt
 from companies import views as company_views
 
 
 urlpatterns = [
+    path('robots.txt', robots_txt, name='robots_txt'),
     path('', home, name='home'),
     path('api/search/', search_api, name='search_api'),
     path('api/newsfeed/', company_views.newsfeed_api, name='newsfeed_api'),

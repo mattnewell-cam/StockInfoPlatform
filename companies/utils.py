@@ -6,6 +6,28 @@ import requests
 from django.db import connection
 
 
+YF_SUFFIX_BY_EXCHANGE = {
+    "LSE": ".L",
+    "AIM": ".L",
+}
+
+
+def normalize_exchange(exchange: str | None) -> str:
+    return (exchange or "").strip().upper()
+
+
+def yfinance_symbol(ticker: str, exchange: str | None = None) -> str:
+    """Build a yfinance symbol from raw ticker + exchange.
+
+    Examples:
+      - BT.A + LSE -> BT-A.L
+      - AAPL + NMS -> AAPL
+    """
+    base = (ticker or "").strip().upper().replace('.', '-')
+    suffix = YF_SUFFIX_BY_EXCHANGE.get(normalize_exchange(exchange), "")
+    return f"{base}{suffix}"
+
+
 def end_of_month(year:int, month) -> dt.date:
     last_day = calendar.monthrange(year, month)[1]
     return dt.date(year, month, last_day)

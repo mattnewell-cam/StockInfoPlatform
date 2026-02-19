@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Follow, Filing, Financial, StockPrice
+from .models import Company, Follow, Filing, Financial, StockPrice, AlertPreference, Notification
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -16,6 +16,8 @@ class CompanyAdmin(admin.ModelAdmin):
 
 admin.site.register(Follow)
 admin.site.register(Filing)
+admin.site.register(AlertPreference)
+admin.site.register(Notification)
 
 @admin.register(StockPrice)
 class StockPriceAdmin(admin.ModelAdmin):

@@ -1,0 +1,1695 @@
+{
+  "samples": {
+    "AAPL": {
+      "class": "normal",
+      "cik": "0000320193",
+      "anchor_pass": true,
+      "decision": "GO",
+      "mapping_totals": {
+        "IS": 12,
+        "BS": 18,
+        "CF": 9
+      },
+      "mapped_counts": {
+        "IS": 10,
+        "BS": 16,
+        "CF": 9
+      },
+      "mapped_pct": {
+        "IS": 83.3,
+        "BS": 88.9,
+        "CF": 100.0
+      },
+      "mapped_concepts": {
+        "IS": [
+          {
+            "concept": "Revenues",
+            "metric": "Total Revenues",
+            "points": 8
+          },
+          {
+            "concept": "SalesRevenueNet",
+            "metric": "Total Revenues",
+            "points": 8
+          },
+          {
+            "concept": "GrossProfit",
+            "metric": "Gross Profit",
+            "points": 8
+          },
+          {
+            "concept": "OperatingIncomeLoss",
+            "metric": "Operating Profit",
+            "points": 8
+          },
+          {
+            "concept": "IncomeTaxExpenseBenefit",
+            "metric": "Provision for Income Taxes",
+            "points": 8
+          },
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Consolidated Net Income",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareBasic",
+            "metric": "Basic EPS",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareDiluted",
+            "metric": "Diluted EPS",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfSharesOutstandingBasic",
+            "metric": "Basic Weighted Average Shares Outstanding",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+            "metric": "Diluted Weighted Average Shares Outstanding",
+            "points": 8
+          }
+        ],
+        "BS": [
+          {
+            "concept": "CashAndCashEquivalentsAtCarryingValue",
+            "metric": "Cash and Cash Equivalents",
+            "points": 8
+          },
+          {
+            "concept": "AccountsReceivableNetCurrent",
+            "metric": "Accounts Receivable",
+            "points": 8
+          },
+          {
+            "concept": "InventoryNet",
+            "metric": "Inventories",
+            "points": 8
+          },
+          {
+            "concept": "AssetsCurrent",
+            "metric": "Total Current Assets",
+            "points": 8
+          },
+          {
+            "concept": "PropertyPlantAndEquipmentNet",
+            "metric": "Net Property, Plant & Equipment",
+            "points": 8
+          },
+          {
+            "concept": "Goodwill",
+            "metric": "Goodwill",
+            "points": 8
+          },
+          {
+            "concept": "IntangibleAssetsNetExcludingGoodwill",
+            "metric": "Net Intangible Assets",
+            "points": 8
+          },
+          {
+            "concept": "Assets",
+            "metric": "Total Assets",
+            "points": 8
+          },
+          {
+            "concept": "AccountsPayableCurrent",
+            "metric": "Accounts Payable",
+            "points": 8
+          },
+          {
+            "concept": "LiabilitiesCurrent",
+            "metric": "Total Current Liabilities",
+            "points": 8
+          },
+          {
+            "concept": "LongTermDebtNoncurrent",
+            "metric": "Long-Term Debt",
+            "points": 8
+          },
+          {
+            "concept": "Liabilities",
+            "metric": "Total Liabilities",
+            "points": 8
+          },
+          {
+            "concept": "RetainedEarningsAccumulatedDeficit",
+            "metric": "Retained Earnings",
+            "points": 8
+          },
+          {
+            "concept": "CommonStockValue",
+            "metric": "Common Stock",
+            "points": 6
+          },
+          {
+            "concept": "StockholdersEquity",
+            "metric": "Total Shareholders' Equity",
+            "points": 8
+          },
+          {
+            "concept": "LiabilitiesAndStockholdersEquity",
+            "metric": "Total Liabilities and Shareholders' Equity",
+            "points": 8
+          }
+        ],
+        "CF": [
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Net Income",
+            "points": 8
+          },
+          {
+            "concept": "DepreciationDepletionAndAmortization",
+            "metric": "Depreciation & Amortization",
+            "points": 8
+          },
+          {
+            "concept": "ShareBasedCompensation",
+            "metric": "Share-Based Compensation Expense",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInOperatingActivities",
+            "metric": "Cash from Operating Activities",
+            "points": 8
+          },
+          {
+            "concept": "PaymentsToAcquirePropertyPlantAndEquipment",
+            "metric": "Capital Expenditure",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInInvestingActivities",
+            "metric": "Cash from Investing Activities",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInFinancingActivities",
+            "metric": "Cash from Financing Activities",
+            "points": 8
+          },
+          {
+            "concept": "PaymentsForRepurchaseOfCommonStock",
+            "metric": "Repurchases of Common Shares",
+            "points": 8
+          },
+          {
+            "concept": "ProceedsFromIssuanceOfCommonStock",
+            "metric": "Issuance of Common Shares",
+            "points": 8
+          }
+        ]
+      },
+      "missing_concepts": {
+        "IS": [
+          "CostOfGoodsSold",
+          "IncomeBeforeTax"
+        ],
+        "BS": [
+          "ShortTermInvestments",
+          "AdditionalPaidInCapital"
+        ],
+        "CF": []
+      },
+      "coverage_vs_expected_metrics": {
+        "IS": {
+          "got_count": 9,
+          "expected_count": 11,
+          "expected_hit_count": 9,
+          "expected_miss_count": 2,
+          "expected_miss_metrics": [
+            "Cost of Sales",
+            "Income Before Provision for Income Taxes"
+          ]
+        },
+        "BS": {
+          "got_count": 18,
+          "expected_count": 18,
+          "expected_hit_count": 16,
+          "expected_miss_count": 2,
+          "expected_miss_metrics": [
+            "Additional Paid-in Capital",
+            "Short-Term Investments"
+          ]
+        },
+        "CF": {
+          "got_count": 11,
+          "expected_count": 9,
+          "expected_hit_count": 9,
+          "expected_miss_count": 0,
+          "expected_miss_metrics": []
+        }
+      },
+      "preview": {
+        "IS": [
+          [
+            "Metric",
+            "2025-09-27",
+            "2024-09-28",
+            "2023-09-30",
+            "2022-09-24",
+            "2021-09-25",
+            "2020-09-26",
+            "2020-06-27",
+            "2020-03-28"
+          ],
+          [
+            "Basic EPS",
+            7.49,
+            6.11,
+            6.16,
+            6.15,
+            5.67,
+            0.74,
+            0.65,
+            0.64
+          ],
+          [
+            "Basic Weighted Average Shares Outstanding",
+            14948500000,
+            15343783000,
+            15744231000,
+            16215963000,
+            16701272000,
+            17352119000,
+            null,
+            null
+          ],
+          [
+            "Consolidated Net Income",
+            112010000000,
+            93736000000,
+            96995000000,
+            99803000000,
+            94680000000,
+            12673000000,
+            11253000000,
+            11249000000
+          ],
+          [
+            "Diluted EPS",
+            7.46,
+            6.08,
+            6.13,
+            6.11,
+            5.61,
+            0.73,
+            0.65,
+            0.64
+          ],
+          [
+            "Diluted Weighted Average Shares Outstanding",
+            15004697000,
+            15408095000,
+            15812547000,
+            16325819000,
+            16864919000,
+            17528214000,
+            null,
+            null
+          ],
+          [
+            "Gross Profit",
+            195201000000,
+            180683000000,
+            169148000000,
+            170782000000,
+            152836000000,
+            24689000000,
+            22680000000,
+            22370000000
+          ],
+          [
+            "Operating Profit",
+            133050000000,
+            123216000000,
+            114301000000,
+            119437000000,
+            108949000000,
+            66288000000,
+            null,
+            null
+          ],
+          [
+            "Provision for Income Taxes",
+            20719000000,
+            29749000000,
+            16741000000,
+            19300000000,
+            14527000000,
+            9680000000,
+            null,
+            null
+          ],
+          [
+            "Total Revenues",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "BS": [
+          [
+            "Metric",
+            "2025-09-27",
+            "2024-09-28",
+            "2023-09-30",
+            "2022-09-24",
+            "2021-09-25",
+            "2020-09-26",
+            "2019-09-28",
+            "2018-09-29"
+          ],
+          [
+            "Liabilities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Accounts Payable",
+            69860000000,
+            68960000000,
+            62611000000,
+            64115000000,
+            54763000000,
+            42296000000,
+            46236000000,
+            55888000000
+          ],
+          [
+            "Accounts Receivable",
+            39777000000,
+            33410000000,
+            29508000000,
+            28184000000,
+            26278000000,
+            16120000000,
+            22926000000,
+            23186000000
+          ],
+          [
+            "Cash and Cash Equivalents",
+            35934000000,
+            29943000000,
+            29965000000,
+            23646000000,
+            34940000000,
+            38016000000,
+            48844000000,
+            25913000000
+          ],
+          [
+            "Common Stock",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Goodwill",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Inventories",
+            5718000000,
+            7286000000,
+            6331000000,
+            4946000000,
+            6580000000,
+            4061000000,
+            4106000000,
+            3956000000
+          ],
+          [
+            "Long-Term Debt",
+            78328000000,
+            85750000000,
+            95281000000,
+            98959000000,
+            109106000000,
+            98667000000,
+            91807000000,
+            93735000000
+          ],
+          [
+            "Net Intangible Assets",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "CF": [
+          [
+            "Metric",
+            "2025-09-27",
+            "2024-09-28",
+            "2023-09-30",
+            "2022-09-24",
+            "2021-09-25",
+            "2020-09-26",
+            "2020-06-27",
+            "2020-03-28"
+          ],
+          [
+            "Investing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Financing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Capital Expenditure",
+            12715000000,
+            9447000000,
+            10959000000,
+            10708000000,
+            11085000000,
+            7309000000,
+            null,
+            null
+          ],
+          [
+            "Cash from Financing Activities",
+            -120686000000,
+            -121983000000,
+            -108488000000,
+            -110749000000,
+            -93353000000,
+            -86820000000,
+            null,
+            null
+          ],
+          [
+            "Cash from Investing Activities",
+            15195000000,
+            2935000000,
+            3705000000,
+            -22354000000,
+            -14545000000,
+            -4289000000,
+            null,
+            null
+          ],
+          [
+            "Cash from Operating Activities",
+            111482000000,
+            118254000000,
+            110543000000,
+            122151000000,
+            104038000000,
+            80674000000,
+            null,
+            null
+          ],
+          [
+            "Depreciation & Amortization",
+            11698000000,
+            11445000000,
+            11519000000,
+            11104000000,
+            11284000000,
+            11056000000,
+            null,
+            null
+          ],
+          [
+            "Issuance of Common Shares",
+            null,
+            null,
+            null,
+            null,
+            1105000000,
+            880000000,
+            null,
+            null
+          ],
+          [
+            "Net Income",
+            112010000000,
+            93736000000,
+            96995000000,
+            99803000000,
+            94680000000,
+            12673000000,
+            11253000000,
+            11249000000
+          ]
+        ]
+      }
+    },
+    "BAC": {
+      "class": "bank",
+      "cik": "0000070858",
+      "anchor_pass": true,
+      "decision": "GO",
+      "mapping_totals": {
+        "IS": 15,
+        "BS": 18,
+        "CF": 9
+      },
+      "mapped_counts": {
+        "IS": 9,
+        "BS": 9,
+        "CF": 8
+      },
+      "mapped_pct": {
+        "IS": 60.0,
+        "BS": 50.0,
+        "CF": 88.9
+      },
+      "mapped_concepts": {
+        "IS": [
+          {
+            "concept": "Revenues",
+            "metric": "Total Revenues",
+            "points": 8
+          },
+          {
+            "concept": "IncomeTaxExpenseBenefit",
+            "metric": "Provision for Income Taxes",
+            "points": 8
+          },
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Consolidated Net Income",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareBasic",
+            "metric": "Basic EPS",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareDiluted",
+            "metric": "Diluted EPS",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfSharesOutstandingBasic",
+            "metric": "Basic Weighted Average Shares Outstanding",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+            "metric": "Diluted Weighted Average Shares Outstanding",
+            "points": 8
+          },
+          {
+            "concept": "InterestExpense",
+            "metric": "Interest Expense",
+            "points": 8
+          },
+          {
+            "concept": "InterestIncomeExpenseNet",
+            "metric": "Net Interest Income",
+            "points": 8
+          }
+        ],
+        "BS": [
+          {
+            "concept": "CashAndCashEquivalentsAtCarryingValue",
+            "metric": "Cash and Cash Equivalents",
+            "points": 8
+          },
+          {
+            "concept": "PropertyPlantAndEquipmentNet",
+            "metric": "Net Property, Plant & Equipment",
+            "points": 8
+          },
+          {
+            "concept": "Goodwill",
+            "metric": "Goodwill",
+            "points": 8
+          },
+          {
+            "concept": "IntangibleAssetsNetExcludingGoodwill",
+            "metric": "Net Intangible Assets",
+            "points": 8
+          },
+          {
+            "concept": "Assets",
+            "metric": "Total Assets",
+            "points": 8
+          },
+          {
+            "concept": "Liabilities",
+            "metric": "Total Liabilities",
+            "points": 8
+          },
+          {
+            "concept": "RetainedEarningsAccumulatedDeficit",
+            "metric": "Retained Earnings",
+            "points": 8
+          },
+          {
+            "concept": "StockholdersEquity",
+            "metric": "Total Shareholders' Equity",
+            "points": 8
+          },
+          {
+            "concept": "LiabilitiesAndStockholdersEquity",
+            "metric": "Total Liabilities and Shareholders' Equity",
+            "points": 8
+          }
+        ],
+        "CF": [
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Net Income",
+            "points": 8
+          },
+          {
+            "concept": "DepreciationDepletionAndAmortization",
+            "metric": "Depreciation & Amortization",
+            "points": 8
+          },
+          {
+            "concept": "ShareBasedCompensation",
+            "metric": "Share-Based Compensation Expense",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInOperatingActivities",
+            "metric": "Cash from Operating Activities",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInInvestingActivities",
+            "metric": "Cash from Investing Activities",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInFinancingActivities",
+            "metric": "Cash from Financing Activities",
+            "points": 8
+          },
+          {
+            "concept": "PaymentsForRepurchaseOfCommonStock",
+            "metric": "Repurchases of Common Shares",
+            "points": 8
+          },
+          {
+            "concept": "ProceedsFromIssuanceOfCommonStock",
+            "metric": "Issuance of Common Shares",
+            "points": 5
+          }
+        ]
+      },
+      "missing_concepts": {
+        "IS": [
+          "SalesRevenueNet",
+          "CostOfGoodsSold",
+          "GrossProfit",
+          "OperatingIncomeLoss",
+          "IncomeBeforeTax",
+          "InterestIncomeOperating"
+        ],
+        "BS": [
+          "ShortTermInvestments",
+          "AccountsReceivableNetCurrent",
+          "InventoryNet",
+          "AssetsCurrent",
+          "AccountsPayableCurrent",
+          "LiabilitiesCurrent",
+          "LongTermDebtNoncurrent",
+          "CommonStockValue",
+          "AdditionalPaidInCapital"
+        ],
+        "CF": [
+          "PaymentsToAcquirePropertyPlantAndEquipment"
+        ]
+      },
+      "coverage_vs_expected_metrics": {
+        "IS": {
+          "got_count": 9,
+          "expected_count": 14,
+          "expected_hit_count": 9,
+          "expected_miss_count": 5,
+          "expected_miss_metrics": [
+            "Cost of Sales",
+            "Gross Profit",
+            "Income Before Provision for Income Taxes",
+            "Interest Income",
+            "Operating Profit"
+          ]
+        },
+        "BS": {
+          "got_count": 11,
+          "expected_count": 18,
+          "expected_hit_count": 9,
+          "expected_miss_count": 9,
+          "expected_miss_metrics": [
+            "Accounts Payable",
+            "Accounts Receivable",
+            "Additional Paid-in Capital",
+            "Common Stock",
+            "Inventories",
+            "Long-Term Debt",
+            "Short-Term Investments",
+            "Total Current Assets",
+            "Total Current Liabilities"
+          ]
+        },
+        "CF": {
+          "got_count": 10,
+          "expected_count": 9,
+          "expected_hit_count": 8,
+          "expected_miss_count": 1,
+          "expected_miss_metrics": [
+            "Capital Expenditure"
+          ]
+        }
+      },
+      "preview": {
+        "IS": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2023-12-31",
+            "2022-12-31",
+            "2021-12-31",
+            "2020-12-31",
+            "2019-12-31",
+            "2018-12-31",
+            "2017-12-31"
+          ],
+          [
+            "Basic EPS",
+            3.25,
+            3.1,
+            3.21,
+            3.6,
+            1.88,
+            2.77,
+            2.64,
+            1.63
+          ],
+          [
+            "Basic Weighted Average Shares Outstanding",
+            7855500000,
+            8028600000,
+            8113700000,
+            8493300000,
+            8753200000,
+            9390500000,
+            10096500000,
+            10195600000
+          ],
+          [
+            "Consolidated Net Income",
+            27132000000,
+            26515000000,
+            27528000000,
+            31978000000,
+            17894000000,
+            27430000000,
+            28147000000,
+            18232000000
+          ],
+          [
+            "Diluted EPS",
+            3.21,
+            3.08,
+            3.19,
+            3.57,
+            1.87,
+            2.75,
+            2.61,
+            1.56
+          ],
+          [
+            "Diluted Weighted Average Shares Outstanding",
+            7935800000,
+            8080500000,
+            8167500000,
+            8558400000,
+            8796900000,
+            9442900000,
+            10236900000,
+            10778400000
+          ],
+          [
+            "Interest Expense",
+            null,
+            73331000000,
+            20103000000,
+            4738000000,
+            8225000000,
+            22345000000,
+            18607000000,
+            12340000000
+          ],
+          [
+            "Net Interest Income",
+            56060000000,
+            56931000000,
+            52462000000,
+            42934000000,
+            43360000000,
+            48891000000,
+            48162000000,
+            45239000000
+          ],
+          [
+            "Provision for Income Taxes",
+            2122000000,
+            1827000000,
+            3441000000,
+            1998000000,
+            1101000000,
+            5324000000,
+            6437000000,
+            10981000000
+          ],
+          [
+            "Total Revenues",
+            101887000000,
+            98581000000,
+            94950000000,
+            89113000000,
+            85528000000,
+            91244000000,
+            91020000000,
+            87126000000
+          ]
+        ],
+        "BS": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2023-12-31",
+            "2022-12-31",
+            "2021-12-31",
+            "2020-12-31",
+            "2019-12-31",
+            "2018-12-31",
+            "2017-12-31"
+          ],
+          [
+            "Liabilities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Cash and Cash Equivalents",
+            null,
+            null,
+            null,
+            null,
+            null,
+            161560000000,
+            177404000000,
+            157434000000
+          ],
+          [
+            "Goodwill",
+            69021000000,
+            69021000000,
+            69022000000,
+            69022000000,
+            68951000000,
+            68951000000,
+            68951000000,
+            68951000000
+          ],
+          [
+            "Net Intangible Assets",
+            2000000000,
+            2000000000,
+            2100000000,
+            2200000000,
+            2200000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Net Property, Plant & Equipment",
+            12168000000,
+            11855000000,
+            11510000000,
+            10833000000,
+            11000000000,
+            10561000000,
+            9906000000,
+            9247000000
+          ],
+          [
+            "Retained Earnings",
+            242349000000,
+            224672000000,
+            207003000000,
+            188064000000,
+            164088000000,
+            156319000000,
+            136314000000,
+            113816000000
+          ],
+          [
+            "Total Assets",
+            3261519000000,
+            3180151000000,
+            3051375000000,
+            3169495000000,
+            2819627000000,
+            2434079000000,
+            2354507000000,
+            2281234000000
+          ],
+          [
+            "Total Liabilities",
+            2965960000000,
+            2888505000000,
+            2778178000000,
+            2899429000000,
+            2546703000000,
+            2169269000000,
+            2089182000000,
+            2014088000000
+          ],
+          [
+            "Total Liabilities and Shareholders' Equity",
+            3261519000000,
+            3180151000000,
+            3051375000000,
+            3169495000000,
+            2819627000000,
+            2434079000000,
+            2354507000000,
+            2281234000000
+          ]
+        ],
+        "CF": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2023-12-31",
+            "2022-12-31",
+            "2021-12-31",
+            "2020-12-31",
+            "2019-12-31",
+            "2018-12-31",
+            "2017-12-31"
+          ],
+          [
+            "Investing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Financing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Cash from Financing Activities",
+            60369000000,
+            93345000000,
+            -106039000000,
+            291650000000,
+            355819000000,
+            3377000000,
+            53118000000,
+            49268000000
+          ],
+          [
+            "Cash from Investing Activities",
+            -90693000000,
+            -35387000000,
+            -2529000000,
+            -313291000000,
+            -177665000000,
+            -80630000000,
+            -71468000000,
+            -51541000000
+          ],
+          [
+            "Cash from Operating Activities",
+            -8805000000,
+            44982000000,
+            -6327000000,
+            -7193000000,
+            37993000000,
+            61777000000,
+            39520000000,
+            9864000000
+          ],
+          [
+            "Depreciation & Amortization",
+            2189000000,
+            2057000000,
+            1978000000,
+            1898000000,
+            1843000000,
+            1729000000,
+            2063000000,
+            2103000000
+          ],
+          [
+            "Issuance of Common Shares",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Net Income",
+            27132000000,
+            26515000000,
+            27528000000,
+            31978000000,
+            17894000000,
+            27430000000,
+            28147000000,
+            18232000000
+          ],
+          [
+            "Repurchases of Common Shares",
+            13104000000,
+            4576000000,
+            5073000000,
+            25126000000,
+            7025000000,
+            28144000000,
+            20094000000,
+            12814000000
+          ]
+        ]
+      }
+    },
+    "AIG": {
+      "class": "insurer",
+      "cik": "0000005272",
+      "anchor_pass": true,
+      "decision": "GO",
+      "mapping_totals": {
+        "IS": 14,
+        "BS": 18,
+        "CF": 9
+      },
+      "mapped_counts": {
+        "IS": 9,
+        "BS": 10,
+        "CF": 6
+      },
+      "mapped_pct": {
+        "IS": 64.3,
+        "BS": 55.6,
+        "CF": 66.7
+      },
+      "mapped_concepts": {
+        "IS": [
+          {
+            "concept": "Revenues",
+            "metric": "Total Revenues",
+            "points": 8
+          },
+          {
+            "concept": "IncomeTaxExpenseBenefit",
+            "metric": "Provision for Income Taxes",
+            "points": 8
+          },
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Consolidated Net Income",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareBasic",
+            "metric": "Basic EPS",
+            "points": 8
+          },
+          {
+            "concept": "EarningsPerShareDiluted",
+            "metric": "Diluted EPS",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfSharesOutstandingBasic",
+            "metric": "Basic Weighted Average Shares Outstanding",
+            "points": 8
+          },
+          {
+            "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+            "metric": "Diluted Weighted Average Shares Outstanding",
+            "points": 8
+          },
+          {
+            "concept": "PremiumsEarnedNet",
+            "metric": "Net Premiums Earned",
+            "points": 8
+          },
+          {
+            "concept": "PolicyholderBenefitsAndClaimsIncurredNet",
+            "metric": "Insurance Benefits & Claims",
+            "points": 8
+          }
+        ],
+        "BS": [
+          {
+            "concept": "ShortTermInvestments",
+            "metric": "Short-Term Investments",
+            "points": 6
+          },
+          {
+            "concept": "PropertyPlantAndEquipmentNet",
+            "metric": "Net Property, Plant & Equipment",
+            "points": 8
+          },
+          {
+            "concept": "Goodwill",
+            "metric": "Goodwill",
+            "points": 8
+          },
+          {
+            "concept": "IntangibleAssetsNetExcludingGoodwill",
+            "metric": "Net Intangible Assets",
+            "points": 5
+          },
+          {
+            "concept": "Assets",
+            "metric": "Total Assets",
+            "points": 8
+          },
+          {
+            "concept": "Liabilities",
+            "metric": "Total Liabilities",
+            "points": 8
+          },
+          {
+            "concept": "RetainedEarningsAccumulatedDeficit",
+            "metric": "Retained Earnings",
+            "points": 8
+          },
+          {
+            "concept": "CommonStockValue",
+            "metric": "Common Stock",
+            "points": 8
+          },
+          {
+            "concept": "StockholdersEquity",
+            "metric": "Total Shareholders' Equity",
+            "points": 8
+          },
+          {
+            "concept": "LiabilitiesAndStockholdersEquity",
+            "metric": "Total Liabilities and Shareholders' Equity",
+            "points": 8
+          }
+        ],
+        "CF": [
+          {
+            "concept": "NetIncomeLoss",
+            "metric": "Net Income",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInOperatingActivities",
+            "metric": "Cash from Operating Activities",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInInvestingActivities",
+            "metric": "Cash from Investing Activities",
+            "points": 8
+          },
+          {
+            "concept": "NetCashProvidedByUsedInFinancingActivities",
+            "metric": "Cash from Financing Activities",
+            "points": 8
+          },
+          {
+            "concept": "PaymentsForRepurchaseOfCommonStock",
+            "metric": "Repurchases of Common Shares",
+            "points": 8
+          },
+          {
+            "concept": "ProceedsFromIssuanceOfCommonStock",
+            "metric": "Issuance of Common Shares",
+            "points": 3
+          }
+        ]
+      },
+      "missing_concepts": {
+        "IS": [
+          "SalesRevenueNet",
+          "CostOfGoodsSold",
+          "GrossProfit",
+          "OperatingIncomeLoss",
+          "IncomeBeforeTax"
+        ],
+        "BS": [
+          "CashAndCashEquivalentsAtCarryingValue",
+          "AccountsReceivableNetCurrent",
+          "InventoryNet",
+          "AssetsCurrent",
+          "AccountsPayableCurrent",
+          "LiabilitiesCurrent",
+          "LongTermDebtNoncurrent",
+          "AdditionalPaidInCapital"
+        ],
+        "CF": [
+          "DepreciationDepletionAndAmortization",
+          "ShareBasedCompensation",
+          "PaymentsToAcquirePropertyPlantAndEquipment"
+        ]
+      },
+      "coverage_vs_expected_metrics": {
+        "IS": {
+          "got_count": 9,
+          "expected_count": 13,
+          "expected_hit_count": 9,
+          "expected_miss_count": 4,
+          "expected_miss_metrics": [
+            "Cost of Sales",
+            "Gross Profit",
+            "Income Before Provision for Income Taxes",
+            "Operating Profit"
+          ]
+        },
+        "BS": {
+          "got_count": 12,
+          "expected_count": 18,
+          "expected_hit_count": 10,
+          "expected_miss_count": 8,
+          "expected_miss_metrics": [
+            "Accounts Payable",
+            "Accounts Receivable",
+            "Additional Paid-in Capital",
+            "Cash and Cash Equivalents",
+            "Inventories",
+            "Long-Term Debt",
+            "Total Current Assets",
+            "Total Current Liabilities"
+          ]
+        },
+        "CF": {
+          "got_count": 8,
+          "expected_count": 9,
+          "expected_hit_count": 6,
+          "expected_miss_count": 3,
+          "expected_miss_metrics": [
+            "Capital Expenditure",
+            "Depreciation & Amortization",
+            "Share-Based Compensation Expense"
+          ]
+        }
+      },
+      "preview": {
+        "IS": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2024-09-30",
+            "2024-06-30",
+            "2024-03-31",
+            "2023-12-31",
+            "2023-09-30",
+            "2023-06-30",
+            "2023-03-31"
+          ],
+          [
+            "Basic EPS",
+            -2.19,
+            null,
+            null,
+            null,
+            5.02,
+            null,
+            null,
+            null
+          ],
+          [
+            "Basic Weighted Average Shares Outstanding",
+            620940268,
+            641621768,
+            661092967,
+            682576848,
+            701485716,
+            712598496,
+            725754549,
+            738661428
+          ],
+          [
+            "Consolidated Net Income",
+            898000000,
+            459000000,
+            -3977000000,
+            1216000000,
+            93000000,
+            2027000000,
+            1493000000,
+            30000000
+          ],
+          [
+            "Diluted EPS",
+            -2.17,
+            null,
+            null,
+            null,
+            4.98,
+            null,
+            null,
+            null
+          ],
+          [
+            "Diluted Weighted Average Shares Outstanding",
+            627289135,
+            647365442,
+            666955168,
+            687961518,
+            708033686,
+            718727312,
+            730547112,
+            744099186
+          ],
+          [
+            "Insurance Benefits & Claims",
+            14567000000,
+            null,
+            null,
+            null,
+            15393000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Net Premiums Earned",
+            23537000000,
+            null,
+            null,
+            null,
+            25564000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Provision for Income Taxes",
+            1170000000,
+            null,
+            null,
+            null,
+            126000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Total Revenues",
+            7177000000,
+            6751000000,
+            6560000000,
+            6763000000,
+            6526000000,
+            7267000000,
+            7436000000,
+            6709000000
+          ]
+        ],
+        "BS": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2023-12-31",
+            "2022-12-31",
+            "2021-12-31",
+            "2021-01-01",
+            "2020-12-31",
+            "2019-12-31",
+            "2018-12-31"
+          ],
+          [
+            "Liabilities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Common Stock",
+            null,
+            4766000000,
+            4766000000,
+            4766000000,
+            null,
+            4766000000,
+            4766000000,
+            4766000000
+          ],
+          [
+            "Goodwill",
+            3373000000,
+            3422000000,
+            3751000000,
+            4056000000,
+            null,
+            4074000000,
+            4038000000,
+            4082000000
+          ],
+          [
+            "Net Intangible Assets",
+            null,
+            null,
+            null,
+            300000000,
+            null,
+            319000000,
+            333000000,
+            360000000
+          ],
+          [
+            "Net Property, Plant & Equipment",
+            1116000000,
+            1132000000,
+            1153000000,
+            1840000000,
+            null,
+            1840000000,
+            1953000000,
+            2172000000
+          ],
+          [
+            "Retained Earnings",
+            35079000000,
+            37516000000,
+            34893000000,
+            23785000000,
+            16437000000,
+            15504000000,
+            23084000000,
+            20884000000
+          ],
+          [
+            "Short-Term Investments",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            13230000000,
+            9674000000
+          ],
+          [
+            "Total Assets",
+            161322000000,
+            539306000000,
+            522228000000,
+            596112000000,
+            598841000000,
+            586481000000,
+            525064000000,
+            491984000000
+          ],
+          [
+            "Total Liabilities",
+            118772000000,
+            488005000000,
+            478774000000,
+            527200000000,
+            532906000000,
+            519282000000,
+            457637000000,
+            434675000000
+          ]
+        ],
+        "CF": [
+          [
+            "Metric",
+            "2024-12-31",
+            "2024-09-30",
+            "2024-06-30",
+            "2024-03-31",
+            "2023-12-31",
+            "2023-09-30",
+            "2023-06-30",
+            "2023-03-31"
+          ],
+          [
+            "Investing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Financing Activities",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Cash from Financing Activities",
+            -5063000000,
+            null,
+            null,
+            null,
+            782000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Cash from Investing Activities",
+            1672000000,
+            null,
+            null,
+            null,
+            -7021000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Cash from Operating Activities",
+            3273000000,
+            null,
+            null,
+            null,
+            6243000000,
+            null,
+            null,
+            null
+          ],
+          [
+            "Issuance of Common Shares",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Net Income",
+            898000000,
+            459000000,
+            -3977000000,
+            1216000000,
+            93000000,
+            2027000000,
+            1493000000,
+            30000000
+          ],
+          [
+            "Repurchases of Common Shares",
+            6652000000,
+            null,
+            null,
+            null,
+            2961000000,
+            null,
+            null,
+            null
+          ]
+        ]
+      }
+    }
+  },
+  "generated_utc": "2026-02-11T13:52:06.329818+00:00"
+}
