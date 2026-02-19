@@ -1,13 +1,19 @@
 import argparse
 import csv
+import html
+import imaplib
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from email import message_from_bytes
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from threading import Event, Lock, Thread
+from urllib.parse import unquote, urlparse
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -20,9 +26,9 @@ FAST_MODE_DEFAULT = True
 WORKERS_DEFAULT = 4
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "cached_financials_2.json").resolve())
-FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "financials_failed.csv").resolve())
-DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "lse_all_tickers.csv").resolve())
+DEFAULT_OUT_JSON = str((BASE_DIR / ".." / "data" / "cached_financials_2.json").resolve())
+FAILED_CSV_DEFAULT = str((BASE_DIR / ".." / "data" / "financials_failed.csv").resolve())
+DEFAULT_TICKERS_CSV = str((BASE_DIR / ".." / "data" / "lse_all_tickers.csv").resolve())
 DEFAULT_CHECKPOINT_JSON = str((BASE_DIR / ".." / "tmp" / "fiscal_pull_checkpoint.json").resolve())
 DEFAULT_TIMINGS_JSONL = str((BASE_DIR / ".." / "tmp" / "fiscal_pull_timings.jsonl").resolve())
 DEFAULT_EVENTS_JSONL = str((BASE_DIR / ".." / "tmp" / "fiscal_pull_events.jsonl").resolve())
@@ -205,7 +211,162 @@ def build_fiscal_ticker(ticker, exchange):
     return f"{normalize_exchange(exchange)}-{ticker}"
 
 
-def start_login_flow(driver):
+URL_RE = re.compile(r"https?://[^\s<>'\"\]\)]+", re.IGNORECASE)
+
+
+def _extract_candidate_urls(text: str):
+    if not text:
+        return []
+    text = html.unescape(text)
+    text = text.replace("=\r\n", "").replace("=\n", "")
+    urls = []
+    for raw in URL_RE.findall(text):
+        u = unquote(raw.strip().strip(".,;()[]{}<>\"'"))
+        if u:
+            urls.append(u)
+    return urls
+
+
+def _score_magic_link(url: str):
+    try:
+        p = urlparse(url)
+    except Exception:
+        return -999
+
+    host = (p.netloc or "").lower()
+    path = (p.path or "").lower()
+    full = url.lower()
+
+    if "fiscal.ai" not in host:
+        return -999
+
+    score = 0
+    if p.query:
+        score += 4
+    if any(k in full for k in ["magic", "verify", "signin", "sign-in", "login", "auth", "token"]):
+        score += 6
+    if any(k in path for k in ["auth", "verify", "login", "signin", "sign-in"]):
+        score += 3
+    if any(k in full for k in ["unsubscribe", "privacy", "support"]):
+        score -= 8
+    return score
+
+
+def _extract_fiscal_magic_link_from_message(raw_email: bytes):
+    msg = message_from_bytes(raw_email)
+    parts = []
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = (part.get_content_type() or "").lower()
+            if content_type not in {"text/plain", "text/html"}:
+                continue
+            payload = part.get_payload(decode=True)
+            if payload is None:
+                continue
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                parts.append(payload.decode(charset, errors="replace"))
+            except Exception:
+                parts.append(payload.decode("utf-8", errors="replace"))
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload is not None:
+            charset = msg.get_content_charset() or "utf-8"
+            try:
+                parts.append(payload.decode(charset, errors="replace"))
+            except Exception:
+                parts.append(payload.decode("utf-8", errors="replace"))
+
+    subject = msg.get("Subject", "")
+    from_header = msg.get("From", "")
+    urls = []
+    urls.extend(_extract_candidate_urls(subject))
+    urls.extend(_extract_candidate_urls(from_header))
+    for body in parts:
+        urls.extend(_extract_candidate_urls(body))
+
+    best = None
+    best_score = -999
+    for u in urls:
+        score = _score_magic_link(u)
+        if score > best_score:
+            best = u
+            best_score = score
+
+    return best if best_score >= 4 else ""
+
+
+def wait_for_magic_link_via_imap(args, requested_after_utc: datetime):
+    if not args.imap_host or not args.imap_user or not args.imap_password:
+        raise RuntimeError(
+            "IMAP magic-link mode requires --imap-host/--imap-user/--imap-password (or FISCAL_MAGIC_IMAP_* env vars)."
+        )
+
+    deadline = time.time() + max(10, int(args.magic_link_timeout_seconds))
+    poll_seconds = max(2, int(args.magic_link_poll_seconds))
+    mailbox = args.imap_mailbox or "INBOX"
+    max_scan = max(5, int(args.imap_max_scan))
+    sender_contains = (args.imap_sender_contains or "").strip().lower()
+    subject_contains = (args.imap_subject_contains or "").strip().lower()
+
+    while time.time() < deadline:
+        with imaplib.IMAP4_SSL(args.imap_host, int(args.imap_port)) as client:
+            client.login(args.imap_user, args.imap_password)
+            status, _ = client.select(mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Unable to open mailbox '{mailbox}'")
+
+            status, data = client.search(None, "ALL")
+            if status != "OK" or not data or not data[0]:
+                time.sleep(poll_seconds)
+                continue
+
+            msg_ids = data[0].split()
+            for msg_id in reversed(msg_ids[-max_scan:]):
+                status, fetched = client.fetch(msg_id, "(RFC822)")
+                if status != "OK" or not fetched:
+                    continue
+
+                raw = b""
+                for item in fetched:
+                    if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], (bytes, bytearray)):
+                        raw = bytes(item[1])
+                        break
+                if not raw:
+                    continue
+
+                msg = message_from_bytes(raw)
+                msg_date = msg.get("Date")
+                if msg_date:
+                    try:
+                        parsed = parsedate_to_datetime(msg_date)
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=timezone.utc)
+                        else:
+                            parsed = parsed.astimezone(timezone.utc)
+                        if parsed < requested_after_utc:
+                            continue
+                    except Exception:
+                        pass
+
+                if sender_contains and sender_contains not in (msg.get("From", "").lower()):
+                    continue
+                if subject_contains and subject_contains not in (msg.get("Subject", "").lower()):
+                    continue
+
+                found = _extract_fiscal_magic_link_from_message(raw)
+                if found:
+                    return found
+
+        time.sleep(poll_seconds)
+
+    raise TimeoutError(
+        f"No fiscal.ai magic link found in IMAP mailbox '{mailbox}' within {int(args.magic_link_timeout_seconds)} seconds"
+    )
+
+
+def start_login_flow(driver, args):
     driver.get(URL)
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
     time.sleep(1)
@@ -217,13 +378,19 @@ def start_login_flow(driver):
         EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email'],input[name='email']"))
     )
     email_input.clear()
-    email_input.send_keys("matthew_newell@outlook.com")
+    email_input.send_keys(args.login_email)
+
+    requested_after_utc = datetime.now(timezone.utc)
 
     try:
         submit_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
         driver.execute_script("arguments[0].click();", submit_btn)
     except Exception:
         email_input.send_keys(Keys.RETURN)
+
+    if args.magic_link_source == "imap":
+        print("Waiting for fiscal.ai magic link via IMAP...")
+        return wait_for_magic_link_via_imap(args, requested_after_utc)
 
     print("Check your email and paste fiscal.ai magic link:")
     return input().strip()
@@ -665,6 +832,18 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
     parser.add_argument("--ticker", type=str, default=TEST_TICKER_DEFAULT, help="Only update a specific ticker")
     parser.add_argument("--magic-link", default="", help="Optional prefilled fiscal.ai magic link")
+    parser.add_argument("--login-email", default=os.getenv("FISCAL_LOGIN_EMAIL", ""), help="Email used for fiscal.ai sign-in")
+    parser.add_argument("--magic-link-source", choices=["manual", "imap"], default=os.getenv("FISCAL_MAGIC_LINK_SOURCE", "manual"), help="How to obtain fiscal.ai magic link")
+    parser.add_argument("--magic-link-timeout-seconds", type=int, default=int(os.getenv("FISCAL_MAGIC_LINK_TIMEOUT_SECONDS", "240")), help="Max wait for auto magic-link retrieval")
+    parser.add_argument("--magic-link-poll-seconds", type=int, default=int(os.getenv("FISCAL_MAGIC_LINK_POLL_SECONDS", "5")), help="Polling interval for auto magic-link retrieval")
+    parser.add_argument("--imap-host", default=os.getenv("FISCAL_MAGIC_IMAP_HOST", ""), help="IMAP host for forwarded fiscal emails")
+    parser.add_argument("--imap-port", type=int, default=int(os.getenv("FISCAL_MAGIC_IMAP_PORT", "993")), help="IMAP port")
+    parser.add_argument("--imap-user", default=os.getenv("FISCAL_MAGIC_IMAP_USER", ""), help="IMAP username")
+    parser.add_argument("--imap-password", default=os.getenv("FISCAL_MAGIC_IMAP_PASSWORD", ""), help="IMAP password / app password")
+    parser.add_argument("--imap-mailbox", default=os.getenv("FISCAL_MAGIC_IMAP_MAILBOX", "INBOX"), help="IMAP mailbox/folder to scan")
+    parser.add_argument("--imap-max-scan", type=int, default=int(os.getenv("FISCAL_MAGIC_IMAP_MAX_SCAN", "30")), help="Max recent emails scanned per poll")
+    parser.add_argument("--imap-sender-contains", default=os.getenv("FISCAL_MAGIC_IMAP_SENDER_CONTAINS", ""), help="Optional sender substring filter")
+    parser.add_argument("--imap-subject-contains", default=os.getenv("FISCAL_MAGIC_IMAP_SUBJECT_CONTAINS", "fiscal"), help="Optional subject substring filter")
     parser.add_argument("--tickers-csv", default=DEFAULT_TICKERS_CSV, help="Path to CSV with tickers")
     parser.add_argument("--use-csv", action="store_true", help="Load tickers from --tickers-csv")
     parser.add_argument("--out-json", default=DEFAULT_OUT_JSON, help="Output JSON path")
@@ -687,6 +866,9 @@ def main():
     parser.add_argument("--version-main", type=int, default=144, help="Chrome major version for undetected_chromedriver")
     parser.add_argument("--benchmark-tag", default="", help="Optional benchmark run tag for logs")
     args = parser.parse_args()
+
+    if not args.magic_link and not args.login_email:
+        raise RuntimeError("Missing login email. Set --login-email or FISCAL_LOGIN_EMAIL.")
 
     def build_driver():
         options = uc.ChromeOptions()
@@ -776,7 +958,7 @@ def main():
         primary_driver = build_driver()
         drivers.append(primary_driver)
 
-        magic_link = args.magic_link.strip() if args.magic_link else start_login_flow(primary_driver)
+        magic_link = args.magic_link.strip() if args.magic_link else start_login_flow(primary_driver, args)
         for _ in range(len(chunks) - 1):
             drivers.append(build_driver())
         for d in drivers:
