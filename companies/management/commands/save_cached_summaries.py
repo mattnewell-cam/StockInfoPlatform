@@ -31,7 +31,7 @@ class Command(BaseCommand):
             '--tickers-csv',
             type=str,
             default=None,
-            help='Path to CSV with rows ticker[,exchange] (default: data/tickers.csv)'
+            help='Path to CSV with rows ticker[,exchange] (default: data/lse_all_tickers.csv)'
         )
         parser.add_argument(
             '--categories',

@@ -26,11 +26,11 @@ PROJECT_ROOT = (BASE_DIR / ".." / "..").resolve()
 load_dotenv(PROJECT_ROOT / ".env")
 
 # --- Paths ---
-OUT_JSON = str(PROJECT_ROOT / "data" / "sp500_financials.json")
-FAILED_CSV = str(PROJECT_ROOT / "data" / "financials_failed.csv")
-TICKERS_CSV = str(PROJECT_ROOT / "data" / "sp500_tickers.csv")
-CHECKPOINT_JSON = str(PROJECT_ROOT / "tmp" / "fiscal_pull_checkpoint.json")
-LOG_JSONL = str(PROJECT_ROOT / "tmp" / "fiscal_pull_log.jsonl")
+OUT_JSON = str(PROJECT_ROOT / "cached_financials_2.json")
+FAILED_CSV = str(PROJECT_ROOT / "data" / "financials_failed_uk.csv")
+# TICKERS_CSV = str(PROJECT_ROOT / "data" / "sp500_tickers.csv")
+TICKERS_CSV = str(PROJECT_ROOT / "data" / "lse_all_tickers.csv")
+LOG_JSONL = str(PROJECT_ROOT / "tmp" / "fiscal_pull_log_uk.jsonl")
 LOGS_DIR = BASE_DIR / "logs"
 
 # --- Config ---
@@ -54,8 +54,6 @@ WORKERS = 1
 RETRY_ATTEMPTS = 1
 HEARTBEAT_SECONDS = 300
 FAST_MODE = True
-EXPAND_SLIDER = True
-
 STATEMENT_SLUGS = {
     "IS": ["income-statement"],
     "BS": ["balance-sheet"],
@@ -117,14 +115,6 @@ def safe_click(driver, element):
         element.click()
     except Exception:
         driver.execute_script("arguments[0].click();", element)
-
-
-def set_slider_range(driver):
-    thumbs = driver.find_elements(By.CSS_SELECTOR, ".mantine-Slider-thumb")
-    if len(thumbs) >= 1:
-        thumbs[0].send_keys(Keys.HOME)
-    if len(thumbs) >= 2:
-        thumbs[1].send_keys(Keys.END)
 
 
 # --- Ticker helpers ---
@@ -340,8 +330,36 @@ def quick_missing_check(driver, ticker, timeout=5):
         time.sleep(0.2)
 
 
+def _has_populated_data(driver):
+    """Return True once the last 3 value columns in at least one data row are non-empty."""
+    try:
+        tables = driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]')
+        for table in tables:
+            rows = driver.execute_script(
+                """
+                const rows = arguments[0].querySelectorAll('tr, [role="row"]');
+                const out = [];
+                for (const r of rows) {
+                    const cells = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
+                    out.push(Array.from(cells).map(c => (c.innerText || c.textContent || '').trim()));
+                }
+                return out;
+                """,
+                table,
+            )
+            for row in rows:
+                if not isinstance(row, list) or len(row) < 4:
+                    continue
+                last_three = row[-3:]
+                if all((v or "").strip() for v in last_three):
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 def _load_page(driver, ticker, slug, multi_table=False):
-    """Navigate to a fiscal statement page, expand slider, and extract table(s)."""
+    """Navigate to a fiscal statement page and extract table(s), waiting for data to be populated."""
     target_path = f"/company/{ticker}/financials/{slug}/annual/"
     if f"/company/{ticker}/" in (driver.current_url or "") and slug not in (driver.current_url or ""):
         nav_links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="/company/{ticker}/financials/{slug}/"]')
@@ -354,16 +372,15 @@ def _load_page(driver, ticker, slug, multi_table=False):
         driver.get(f"{URL}{target_path}")
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
 
-    if not FAST_MODE:
-        time.sleep(0.25)
-
     if slug == "income-statement" and not multi_table:
         ensure_k_units(driver)
 
     quick_missing_check(driver, ticker, timeout=2 if FAST_MODE else 4)
 
-    if EXPAND_SLIDER:
-        set_slider_range(driver)
+    # Wait until the table data is actually populated (session fully authenticated),
+    # then give React a moment to finish re-rendering before grabbing elements.
+    WebDriverWait(driver, 30).until(_has_populated_data)
+    time.sleep(0.5)
 
     if multi_table:
         WebDriverWait(driver, 15 if FAST_MODE else 20).until(
@@ -381,6 +398,7 @@ def _load_page(driver, ticker, slug, multi_table=False):
         )) > 1
     )
 
+    # Re-fetch table_root fresh — the earlier reference may be stale after React re-renders on auth.
     table_root = wait_for_table(driver, timeout=10 if FAST_MODE else 15)
     rows = extract_rows_from_table(table_root)
     if not rows or len(rows[0]) < 2:
@@ -390,59 +408,43 @@ def _load_page(driver, ticker, slug, multi_table=False):
 
 # --- Statement pulling ---
 
-def _with_exchange_fallback(ticker, exchange, fn):
-    try:
-        return fn(exchange), exchange
-    except Exception as exc:
-        if "not found" not in str(exc).lower():
-            raise
-        fallback = "AIM" if exchange != "AIM" else "LSE"
-        return fn(fallback), fallback
-
-
 def pull_financials(driver, ticker, exchange="LSE"):
-    def run(exch):
-        fiscal_ticker = build_fiscal_ticker(ticker, exch)
-        rows_by_stmt = {}
-        for stmt, slugs in STATEMENT_SLUGS.items():
-            last_exc = None
-            use_multi = stmt in ("BS", "CF")
-            for slug in slugs:
-                try:
-                    if use_multi:
-                        tables = _load_page(driver, fiscal_ticker, slug, multi_table=True)
-                        headers = [t[0][0].strip() if t and t[0] else "?" for t in tables]
-                        print(f"  [{stmt}] {len(tables)} table(s) found, headers: {headers}")
-                        rows_by_stmt[stmt] = [row for table in tables for row in table]
-                    else:
-                        rows_by_stmt[stmt] = _load_page(driver, fiscal_ticker, slug)
-                    last_exc = None
-                    break
-                except Exception as exc:
-                    last_exc = exc
-            if last_exc:
-                raise last_exc
-        return rows_by_stmt
-
-    return _with_exchange_fallback(ticker, exchange, run)
+    fiscal_ticker = build_fiscal_ticker(ticker, exchange)
+    rows_by_stmt = {}
+    for stmt, slugs in STATEMENT_SLUGS.items():
+        last_exc = None
+        use_multi = stmt in ("BS", "CF")
+        for slug in slugs:
+            try:
+                if use_multi:
+                    tables = _load_page(driver, fiscal_ticker, slug, multi_table=True)
+                    headers = [t[0][0].strip() if t and t[0] else "?" for t in tables]
+                    print(f"  [{stmt}] {len(tables)} table(s) found, headers: {headers}")
+                    rows_by_stmt[stmt] = [row for table in tables for row in table]
+                else:
+                    rows_by_stmt[stmt] = _load_page(driver, fiscal_ticker, slug)
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+        if last_exc:
+            raise last_exc
+    return rows_by_stmt, exchange
 
 
 def pull_supplemental(driver, ticker, exchange="LSE"):
-    def run(exch):
-        fiscal_ticker = build_fiscal_ticker(ticker, exch)
-        result = {}
-        for stmt, config in SUPPLEMENTAL_TABLES.items():
-            tables = _load_page(driver, fiscal_ticker, config["slug"], multi_table=True)
-            found = []
-            for name in config["names"]:
-                t = find_table_by_name(tables, name)
-                if t:
-                    found.extend(t)
-            if found:
-                result[stmt] = dedupe_rows(found)
-        return result
-
-    return _with_exchange_fallback(ticker, exchange, run)
+    fiscal_ticker = build_fiscal_ticker(ticker, exchange)
+    result = {}
+    for stmt, config in SUPPLEMENTAL_TABLES.items():
+        tables = _load_page(driver, fiscal_ticker, config["slug"], multi_table=True)
+        found = []
+        for name in config["names"]:
+            t = find_table_by_name(tables, name)
+            if t:
+                found.extend(t)
+        if found:
+            result[stmt] = dedupe_rows(found)
+    return result, exchange
 
 
 # --- Data helpers ---
@@ -467,8 +469,19 @@ def validate_financials(financials):
     return [req for req in ("IS", "BS", "CF") if req not in financials or not financials[req]]
 
 
-def needs_supplemental(ticker_data):
-    return any(stmt not in ticker_data or not ticker_data[stmt] for stmt in ("BS", "CF"))
+def needs_work(ticker_data):
+    """Return True if the ticker needs a (re-)scrape: missing entirely or incomplete supplemental sections."""
+    if not ticker_data:
+        return True
+    def labels(stmt):
+        return [(r[0] or "").strip().lower() for r in ticker_data.get(stmt, []) if r]
+    bs = labels("BS")
+    cf = labels("CF")
+    has_liabilities = any("liabilit" in l for l in bs)
+    has_equity = any("equity" in l for l in bs)
+    has_investing = any("investing" in l for l in cf)
+    has_financing = any("financing" in l for l in cf)
+    return not (has_liabilities and has_equity and has_investing and has_financing)
 
 
 def classify_error(exc):
@@ -484,25 +497,6 @@ def classify_error(exc):
     if "empty rows" in s:
         return "empty_rows"
     return "other"
-
-
-# --- Checkpoint ---
-
-def build_checkpoint(path):
-    cp = load_json(path, {})
-    for key in ("completed", "failed", "in_flight", "meta"):
-        cp.setdefault(key, {})
-    cp.setdefault("created_at", utc_now_iso())
-    return cp
-
-
-def save_checkpoint(path, checkpoint):
-    checkpoint["updated_at"] = utc_now_iso()
-    tmp = Path(path).with_suffix(Path(path).suffix + ".tmp")
-    ensure_parent(path)
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(checkpoint, f, indent=2, sort_keys=True)
-    os.replace(tmp, path)
 
 
 def load_failed_set(path):
@@ -547,7 +541,6 @@ def main():
         raise last
 
     lock = Lock()
-    checkpoint = build_checkpoint(CHECKPOINT_JSON)
     cached = load_json(OUT_JSON, {})
     failed_set = load_failed_set(FAILED_CSV)
     state = {"processed": 0, "total": 0, "started_at": time.time(), "ok": 0, "failed": 0}
@@ -567,7 +560,7 @@ def main():
                 if len(row) >= 2 and row[1].strip():
                     ticker_market[t] = normalize_exchange(row[1].strip())
 
-    pending = [t for t in tickers if t not in checkpoint["completed"]]
+    pending = [t for t in tickers if needs_work(cached.get(t))]
     if not pending:
         print("No tickers to process")
         return
@@ -575,7 +568,6 @@ def main():
     workers = min(WORKERS, len(pending))
     chunks = [pending[i::workers] for i in range(workers)]
     state["total"] = len(pending)
-    save_checkpoint(CHECKPOINT_JSON, checkpoint)
 
     drivers = []
     try:
@@ -594,21 +586,11 @@ def main():
             open_magic_link(d, magic_link)
             assert_authenticated(d)
 
-        stop_event = Event()
-
         def worker_run(worker_id, driver, worker_tickers):
             for t in worker_tickers:
                 exchange = ticker_market.get(t, "LSE")
                 is_cached = t in cached
                 kind = "supplemental" if is_cached else "full"
-
-                if is_cached and not needs_supplemental(cached[t]):
-                    with lock:
-                        checkpoint["completed"][t] = {"at": utc_now_iso(), "kind": "already_complete"}
-                        state["processed"] += 1
-                        state["ok"] += 1
-                        save_checkpoint(CHECKPOINT_JSON, checkpoint)
-                    continue
 
                 started = time.perf_counter()
                 try:
@@ -633,14 +615,8 @@ def main():
 
                     elapsed = round(time.perf_counter() - started, 3)
                     with lock:
-                        checkpoint["completed"][t] = {
-                            "at": utc_now_iso(), "kind": kind, "exchange": used_exchange,
-                            "elapsed_sec": elapsed, "attempts": attempts, "rows": row_counts,
-                        }
-                        checkpoint["failed"].pop(t, None)
                         state["processed"] += 1
                         state["ok"] += 1
-                        save_checkpoint(CHECKPOINT_JSON, checkpoint)
 
                     log_event({"event": "ticker_done", "ticker": t, "status": "ok", "kind": kind,
                                "exchange": used_exchange, "elapsed_sec": elapsed, "rows": row_counts}, lock=lock)
@@ -669,7 +645,6 @@ def main():
             for fut in as_completed(futures):
                 fut.result()
 
-        stop_event.set()
         log_event({"event": "run_complete", "processed": state["processed"], "ok": state["ok"], "failed": state["failed"]})
         print("Done")
 

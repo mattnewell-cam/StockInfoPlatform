@@ -405,7 +405,7 @@ def generate_summaries_for_tickers(
 def load_tickers_from_csv(csv_path=None):
     """Load ticker list from CSV file."""
     if csv_path is None:
-        csv_path = str((BASE_DIR / ".." / "data" / "tickers.csv").resolve())
+        csv_path = str((BASE_DIR / ".." / "data" / "lse_all_tickers.csv").resolve())
 
     with open(csv_path) as f:
         return [row[0] for row in csv.reader(f) if row]
