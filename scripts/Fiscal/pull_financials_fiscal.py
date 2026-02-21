@@ -615,6 +615,7 @@ def main():
                     if is_cached:
                         (supp, used_exchange), attempts = retry(lambda: pull_supplemental(driver, t, exchange))
                         with lock:
+                            cached[t]["exchange"] = used_exchange
                             for stmt, rows in supp.items():
                                 cached[t][stmt] = merge_rows(cached[t].get(stmt, []), rows)
                             save_json(OUT_JSON, cached)
@@ -622,7 +623,7 @@ def main():
                     else:
                         (financials, used_exchange), attempts = retry(lambda: pull_financials(driver, t, exchange))
                         with lock:
-                            cached[t] = financials
+                            cached[t] = {"exchange": used_exchange, **financials}
                             save_json(OUT_JSON, cached)
                         row_counts = {k: len(financials.get(k, [])) for k in ("IS", "BS", "CF")}
 

@@ -243,7 +243,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     ap.add_argument('--tickers', default='JPM,PGR')
     ap.add_argument('--db', default=str(root / 'db.sqlite3'))
-    ap.add_argument('--cache', default=str(root / 'cached_financials_2.json'))
+    ap.add_argument('--cache', default=str(root / 'cached_financials_uk.json'))
     ap.add_argument('--out-json', default=str(root / 'reports/data/edgar_mapped_examples.json'))
     ap.add_argument('--out-md', default=str(root / 'reports/edgar_mapped_examples.md'))
     args = ap.parse_args()
@@ -254,13 +254,13 @@ def main():
     ciks = ticker_to_cik()
     classes = company_classes(Path(args.db), tickers)
 
-    out = {'tickers': {}, 'requested': tickers, 'not_in_cached_financials_2': not_in_cache}
+    out = {'tickers': {}, 'requested': tickers, 'not_in_cached_financials_uk': not_in_cache}
 
     md = [
         '# EDGAR -> Fiscal-style mapping examples (class-specific templates)',
         '',
         'Requested tickers: ' + ', '.join(tickers),
-        'Tickers confirmed not in cached_financials_2: ' + (', '.join(not_in_cache) if not_in_cache else 'none'),
+        'Tickers confirmed not in cached_financials_uk: ' + (', '.join(not_in_cache) if not_in_cache else 'none'),
         '',
         'Legend: ✅ mapped to SEC us-gaap concept | ❌ left empty (no candidate concept had usable 10-K FY data)',
         '',

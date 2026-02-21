@@ -1,7 +1,7 @@
 # EDGAR -> Fiscal-style mapping examples (class-specific templates)
 
 Requested tickers: JPM, PGR
-Tickers confirmed not in cached_financials_2: JPM, PGR
+Tickers confirmed not in cached_financials_uk: JPM, PGR
 
 Legend: ✅ mapped to SEC us-gaap concept | ❌ left empty (no candidate concept had usable 10-K FY data)
 

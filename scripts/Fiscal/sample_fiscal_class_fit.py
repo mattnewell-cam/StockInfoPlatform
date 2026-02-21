@@ -26,7 +26,7 @@ def metric_set(rows):
 def main():
     ap = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[1]
-    ap.add_argument("--cache-json", default=str(root / "data" / "cached_financials_2.json"))
+    ap.add_argument("--cache-json", default=str(root / "data" / "cached_financials_uk.json"))
     ap.add_argument("--catalog-json", default=str(root / "configs" / "fiscal_raw_catalog.json"))
     ap.add_argument("--samples", default="AAPL,BAC,AIG")
     ap.add_argument("--out-md", default=str(root / "reports" / "fiscal_sample_fit.md"))

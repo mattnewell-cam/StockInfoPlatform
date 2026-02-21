@@ -37,7 +37,7 @@ companies/              # Main Django app
     registration/*.html
 data/                   # CSV + JSON data files (gitignored)
   tickers.csv
-  cached_financials_2.json
+  cached_financials_uk.json
   cached_summaries.json
   alert_types.csv
   financials_failed.csv
@@ -47,7 +47,7 @@ data/                   # CSV + JSON data files (gitignored)
   ticker_exchanges.csv
   us_seed_tickers.csv
 scripts/                # Standalone scripts (not Django)
-  pull_financials_fiscal.py     # Fiscal scrape -> data/cached_financials_2.json
+  pull_financials_fiscal.py     # Fiscal scrape -> data/cached_financials_uk.json
   generate_AI_summaries.py      # OpenAI -> data/cached_summaries.json
   import_to_postgres.py         # Legacy Postgres importer
   run_comparison.py             # Model comparison runner
@@ -68,7 +68,7 @@ python manage.py update_prices --ticker TICKER --full --years 10
 ## Data Pipeline
 
 1. `data/tickers.csv` -> `add_companies_by_csv` (yfinance metadata)
-2. `scripts/pull_financials_fiscal.py` -> `data/cached_financials_2.json`
+2. `scripts/pull_financials_fiscal.py` -> `data/cached_financials_uk.json`
 3. `save_cached_financials` -> Financial rows in SQLite
 4. `scripts/generate_AI_summaries.py` -> `data/cached_summaries.json`
 5. `save_cached_summaries` -> Company `description`, `special_sits`, `writeups`

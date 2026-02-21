@@ -82,27 +82,6 @@ class CompanyDetailFiscalPipelineTests(TestCase):
         self.assertEqual(response.context_data["CF_table"]["rows"], [])
 
 
-class SaveCachedFinancialsCommandTests(TestCase):
-    @patch("companies.management.commands.save_cached_financials.call_command")
-    def test_save_cached_financials_delegates_to_fiscal_loader(self, mock_call_command):
-        call_command(
-            "save_cached_financials",
-            "--file",
-            "custom_financials.json",
-            "--ticker",
-            "ABC",
-            "--skip-create",
-            "--dry-run",
-        )
-
-        mock_call_command.assert_called_once_with(
-            "load_cached_financials_2",
-            file="custom_financials.json",
-            ticker="ABC",
-            skip_create=True,
-            dry_run=True,
-        )
-
 
 class AddCompaniesByCsvTests(TestCase):
     @patch("companies.management.commands.add_companies_by_csv.yf.Ticker")

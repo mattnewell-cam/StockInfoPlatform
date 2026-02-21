@@ -50,7 +50,7 @@ Scripts in `/scripts` support populating/enriching the DB and caches:
 - `companies/` — main Django app (models, views, templates)
 - `scripts/` — standalone scripts (scraping / AI enrichment)
 - `db.sqlite3` — local SQLite database (default)
-- `cached_financials_2.json` — large JSON cache used by fiscal pull workflows
+- `cached_financials_uk.json` — large JSON cache used by fiscal pull workflows
 
 Templates:
 - `companies/templates/companies/` — company detail, screener, notes, statement table
@@ -166,7 +166,7 @@ Code:
 The fiscal.ai pull is **one ingestion path** for statements.
 
 - Script: `scripts/pull_financials_fiscal.py`
-- Output cache: `cached_financials_2.json`
+- Output cache: `cached_financials_uk.json`
 - Failure log: `financials_failed.csv`
 
 Exchange prefix mapping matters for fiscal.ai:
@@ -180,7 +180,7 @@ Typical command:
   --use-csv --tickers-csv sp500_remaining_fiscal.csv \
   --workers 4 \
   --magic-link "<PASTE_LINK>" \
-  --out-json cached_financials_2.json \
+  --out-json cached_financials_uk.json \
   --failed-csv financials_failed.csv
 ```
 

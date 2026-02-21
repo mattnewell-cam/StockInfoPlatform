@@ -36,7 +36,7 @@ companies/              # Main Django app
     companies/notes_company.html
     registration/*.html
 scripts/                # Standalone scripts (not Django)
-  pull_financials_fiscal.py     # Fiscal scrape -> cached_financials_2.json
+  pull_financials_fiscal.py     # Fiscal scrape -> cached_financials_uk.json
   generate_AI_summaries.py # OpenAI -> cached_summaries.json
 ```
 
@@ -55,7 +55,7 @@ python manage.py update_prices --ticker TICKER --full --years 10
 ## Data Pipeline
 
 1. `tickers.csv` -> `add_companies_by_csv` (yfinance metadata)
-2. `scripts/pull_financials_fiscal.py` -> `cached_financials_2.json`
+2. `scripts/pull_financials_fiscal.py` -> `cached_financials_uk.json`
 3. `save_cached_financials` -> Financial rows in SQLite
 4. `scripts/generate_AI_summaries.py` -> `cached_summaries.json`
 5. `save_cached_summaries` -> Company `description`, `special_sits`, `writeups`

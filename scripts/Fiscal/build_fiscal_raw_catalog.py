@@ -78,7 +78,7 @@ def top_core(counter: Counter, denom: int, threshold: float):
 def main():
     ap = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[1]
-    ap.add_argument("--cache-json", default=str(root / "data" / "cached_financials_2.json"))
+    ap.add_argument("--cache-json", default=str(root / "data" / "cached_financials_uk.json"))
     ap.add_argument("--sp500-csv", default=str(root / "data" / "sp500_tickers_fiscal_exchange.csv"))
     ap.add_argument("--db", default=str(root / "db.sqlite3"))
     ap.add_argument("--core-threshold", type=float, default=0.8)
