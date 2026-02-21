@@ -1,0 +1,3 @@
+- Make sure it grabs liabs, equity, investing and financing too
+- See if the cookie can be carried over so it doesn't have to wait for the session to authenticate again, delay before padlocks disappear
+- See if it works! 

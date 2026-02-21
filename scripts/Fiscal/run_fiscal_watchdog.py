@@ -23,7 +23,7 @@ def main():
     ap.add_argument("--workdir", default=".")
     ap.add_argument("--log-jsonl", default="tmp/fiscal_watchdog.jsonl")
     ap.add_argument("--python-bin", default=sys.executable or "python3")
-    ap.add_argument("--script", default="scripts/pull_financials_fiscal.py")
+    ap.add_argument("--script", default="scripts/Fiscal/pull_financials_fiscal.py")
     ap.add_argument("--max-restarts", type=int, default=6)
     ap.add_argument("--window-seconds", type=int, default=3600)
     ap.add_argument("--backoff-seconds", type=int, default=30)

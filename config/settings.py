@@ -39,7 +39,7 @@ DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes", "on"}
 ALLOWED_HOSTS = [
     "tearsheet.one",
     "www.tearsheet.one",
-    "tearsheet-ap7c.onrender.com",
+    "stockinfoplatform.onrender.com",
     "127.0.0.1",
 ]
 
