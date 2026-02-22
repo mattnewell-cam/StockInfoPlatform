@@ -47,7 +47,8 @@ def load_nasdaq(text: str):
 
 
 def load_other(text: str):
-    # still needed for names/flags for ADR/REIT etc when symbol exists there
+    # include NYSE from otherlisted; also use for names/flags
+    rows = []
     info = {}
     for line in text.splitlines():
         if line.startswith('ACT Symbol|') or line.startswith('File Creation Time') or not line.strip():
@@ -57,10 +58,13 @@ def load_other(text: str):
             continue
         symbol = parts[0].strip()
         name = parts[1].strip()
+        exch = parts[2].strip()  # N, A, P, Z, V
         etf = parts[4].strip()
         test_issue = parts[6].strip()
+        if exch == 'N':
+            rows.append({'ticker': symbol, 'exchange': 'NYSE'})
         info[symbol] = {'name': name, 'test': test_issue, 'etf': etf}
-    return info
+    return rows, info
 
 KEYWORDS_EXCLUDE = re.compile(
     r"\b(ETF|ETN|FUND|TRUST|UNIT|WARRANT|RIGHT|PREFERRED|NOTES|BOND|SERIES|SPAC|HOLDINGS|INCOME|MUNICIPAL|INTERNATIONAL|INDEX|PORTFOLIO|INCOME|S&P|DOW JONES)\b",
@@ -72,12 +76,12 @@ nasdaq_text = fetch_text(NASDAQ_URL)
 other_text = fetch_text(OTHER_URL)
 
 nasdaq_rows, nasdaq_info = load_nasdaq(nasdaq_text)
-other_info = load_other(other_text)
+other_rows, other_info = load_other(other_text)
 
 # combine
 rows = []
 seen = set()
-for r in nasdaq_rows:
+for r in nasdaq_rows + other_rows:
     if r['ticker'] in seen:
         continue
     seen.add(r['ticker'])
