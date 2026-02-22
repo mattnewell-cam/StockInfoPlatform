@@ -26,11 +26,12 @@ PROJECT_ROOT = (BASE_DIR / ".." / "..").resolve()
 load_dotenv(PROJECT_ROOT / ".env")
 
 # --- Paths ---
-OUT_JSON = str(PROJECT_ROOT / "cached_financials_2.json")
-FAILED_CSV = str(PROJECT_ROOT / "data" / "financials_failed_uk.csv")
+OUT_JSON = str(PROJECT_ROOT / "all_us_financials.json")
+FAILED_CSV = str(PROJECT_ROOT / "data" / "financials_failed_us.csv")
 # TICKERS_CSV = str(PROJECT_ROOT / "data" / "sp500_tickers.csv")
-TICKERS_CSV = str(PROJECT_ROOT / "data" / "lse_all_tickers.csv")
-LOG_JSONL = str(PROJECT_ROOT / "tmp" / "fiscal_pull_log_uk.jsonl")
+TICKERS_CSV = str(PROJECT_ROOT / "data" / "all_us_tickers.csv")
+# TICKERS_CSV = str(PROJECT_ROOT / "data" / "lse_all_tickers.csv")
+LOG_JSONL = str(PROJECT_ROOT / "tmp" / "fiscal_pull_log_us.jsonl")
 LOGS_DIR = BASE_DIR / "logs"
 
 # --- Config ---
@@ -307,11 +308,17 @@ def extract_rows_from_table(table_root):
 
 
 def extract_all_tables_from_page(driver):
-    return [
-        rows
-        for el in driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]')
-        if (rows := extract_rows_from_table(el))
-    ]
+    all_tables = driver.execute_script("""
+        const tables = document.querySelectorAll('[data-sentry-component="TableContent"]');
+        return Array.from(tables).map(table => {
+            const rows = table.querySelectorAll('tr, [role="row"]');
+            return Array.from(rows).map(r => {
+                const cells = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
+                return Array.from(cells).map(c => (c.innerText || c.textContent || '').trim());
+            }).filter(row => row.length >= 2 && row.slice(1).some(v => v));
+        }).filter(t => t.length > 0);
+    """)
+    return all_tables or []
 
 
 def find_table_by_name(tables, name):
@@ -384,10 +391,9 @@ def _load_page(driver, ticker, slug, multi_table=False):
 
     if multi_table:
         WebDriverWait(driver, 15 if FAST_MODE else 20).until(
-            lambda d: len([
-                el for el in d.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]')
-                if el.find_elements(By.CSS_SELECTOR, 'tr, [role="row"]')
-            ]) >= 3
+            lambda d: d.execute_script("""
+                return document.querySelectorAll('[data-sentry-component="TableContent"]').length >= 3;
+            """)
         )
         return extract_all_tables_from_page(driver)
 
@@ -479,9 +485,8 @@ def needs_work(ticker_data):
     cf = labels("CF")
     has_liabilities = any("liabilit" in l for l in bs)
     has_equity = any("equity" in l for l in bs)
-    has_investing = any("investing" in l for l in cf)
     has_financing = any("financing" in l for l in cf)
-    return not (has_liabilities and has_equity and has_investing and has_financing)
+    return not (has_liabilities and has_equity and has_financing)
 
 
 def classify_error(exc):

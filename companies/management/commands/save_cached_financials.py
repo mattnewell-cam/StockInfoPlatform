@@ -92,12 +92,12 @@ EXCHANGE_ALIASES = {
 
 DEFAULT_FILES = [
     'cached_financials_uk.json',
-    'data/sp500_financials.json',
+    'data/all_us_financials.json',
 ]
 
 
 class Command(BaseCommand):
-    help = "Load financials from cached_financials_uk.json and data/sp500_financials.json."
+    help = "Load financials from cached_financials_uk.json and data/all_us_financials.json."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -105,7 +105,7 @@ class Command(BaseCommand):
             type=str,
             nargs='+',
             default=DEFAULT_FILES,
-            help='Path(s) to JSON file(s) (default: cached_financials_uk.json data/sp500_financials.json)'
+            help='Path(s) to JSON file(s) (default: cached_financials_uk.json data/all_us_financials.json)'
         )
         parser.add_argument(
             '--ticker',
