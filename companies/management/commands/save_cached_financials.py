@@ -91,7 +91,7 @@ EXCHANGE_ALIASES = {
 
 
 DEFAULT_FILES = [
-    'cached_financials_uk.json',
+    'data/cached_financials_uk.json',
     'data/all_us_financials.json',
 ]
 
@@ -170,9 +170,20 @@ class Command(BaseCommand):
 
             self.stdout.write(f"[{i}/{total}] Processing {ticker}...")
 
+            if raw_ticker not in data:
+                self.stderr.write(self.style.ERROR(f"  {ticker} not found in data file"))
+                failed += 1
+                continue
+
+            ticker_data = data[raw_ticker]
+            exchange = ticker_data.get("exchange")
+
             if exchange:
                 aliases = EXCHANGE_ALIASES.get(exchange, [exchange])
                 company = Company.objects.filter(ticker=ticker, exchange__in=aliases).first()
+                # Fallback: exchange alias may not match what's stored — try ticker-only
+                if company is None:
+                    company = Company.objects.filter(ticker=ticker).first()
             else:
                 company = Company.objects.filter(ticker=ticker).first()
             if company is None:
@@ -195,9 +206,6 @@ class Command(BaseCommand):
             elif not OVERWRITE and company.financials.exists():
                 self.stdout.write(f"  Already has financials, skipping")
                 continue
-
-            ticker_data = data[raw_ticker]
-            exchange = ticker_data.get("exchange")
             entries = []
 
             for statement in ['IS', 'BS', 'CF']:

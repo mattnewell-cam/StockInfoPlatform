@@ -8,11 +8,10 @@ import json
 import os
 import re
 import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Event, Lock, Thread
+from threading import Lock
 
 import undetected_chromedriver as uc
 from dotenv import load_dotenv
@@ -26,8 +25,10 @@ PROJECT_ROOT = (BASE_DIR / ".." / "..").resolve()
 load_dotenv(PROJECT_ROOT / ".env")
 
 # --- Paths ---
-OUT_JSON = str(PROJECT_ROOT / "all_us_financials.json")
+OUT_JSON = str(PROJECT_ROOT / "data" / "all_us_financials.json")
 FAILED_CSV = str(PROJECT_ROOT / "data" / "financials_failed_us.csv")
+NOT_FOUND_CSV = str(PROJECT_ROOT / "data" / "financials_not_found_us.csv")
+INCOMPLETE_DATA_CSV = str(PROJECT_ROOT / "data" / "financials_incomplete_data_us.csv")
 # TICKERS_CSV = str(PROJECT_ROOT / "data" / "sp500_tickers.csv")
 TICKERS_CSV = str(PROJECT_ROOT / "data" / "all_us_tickers.csv")
 # TICKERS_CSV = str(PROJECT_ROOT / "data" / "lse_all_tickers.csv")
@@ -66,6 +67,14 @@ SUPPLEMENTAL_TABLES = {
 }
 
 
+class PageNotFoundError(RuntimeError):
+    pass
+
+
+class IncompleteDataError(RuntimeError):
+    pass
+
+
 # --- Utilities ---
 
 def utc_now_iso():
@@ -81,10 +90,29 @@ def load_json(path: str, default):
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
 
 
+def _compact_dumps(obj, indent=2, _level=0):
+    """JSON where leaf arrays (all-primitive lists) are written on one line."""
+    pad = ' ' * (indent * _level)
+    ipad = ' ' * (indent * (_level + 1))
+    if isinstance(obj, dict):
+        if not obj:
+            return '{}'
+        parts = [f'{ipad}{json.dumps(k)}: {_compact_dumps(v, indent, _level + 1)}' for k, v in obj.items()]
+        return '{\n' + ',\n'.join(parts) + '\n' + pad + '}'
+    if isinstance(obj, list):
+        if not obj:
+            return '[]'
+        if all(not isinstance(x, (list, dict)) for x in obj):
+            return '[' + ', '.join(json.dumps(x, ensure_ascii=False) for x in obj) + ']'
+        parts = [f'{ipad}{_compact_dumps(x, indent, _level + 1)}' for x in obj]
+        return '[\n' + ',\n'.join(parts) + '\n' + pad + ']'
+    return json.dumps(obj, ensure_ascii=False)
+
+
 def save_json(path: str, data):
     ensure_parent(path)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        f.write(_compact_dumps(data))
 
 
 def log_event(payload: dict, lock=None):
@@ -329,16 +357,23 @@ def find_table_by_name(tables, name):
 def quick_missing_check(driver, ticker, timeout=5):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]'):
+        result = driver.execute_script("""
+            if (document.querySelector('[data-sentry-component="TableContent"]')) return 'table';
+            var body = (document.body && document.body.innerText || '').toLowerCase();
+            if (/not found|no results|no data|does not exist|cannot find|data not found/.test(body)) return 'not_found';
+            if (body.includes('data is not available for')) return 'not_found';
+            return null;
+        """)
+        if result == 'table':
             return
-        body = driver.find_element(By.TAG_NAME, "body").text.lower()
-        if any(m in body for m in ["not found", "no results", "no data", "does not exist", "cannot find", "can't find"]):
-            raise RuntimeError(f"{ticker} not found on fiscal.ai")
+        if result == 'not_found':
+            raise PageNotFoundError(f"{ticker}: not found or data unavailable")
         time.sleep(0.2)
 
 
-def _has_populated_data(driver):
-    """Return True once the last 3 value columns in at least one data row are non-empty."""
+def _count_filled_data_cells(driver):
+    """Count non-empty, non-dash values across all data rows (skipping header row 0) in all tables."""
+    total = 0
     try:
         tables = driver.find_elements(By.CSS_SELECTOR, '[data-sentry-component="TableContent"]')
         for table in tables:
@@ -354,15 +389,32 @@ def _has_populated_data(driver):
                 """,
                 table,
             )
-            for row in rows:
-                if not isinstance(row, list) or len(row) < 4:
+            for row in (rows or [])[1:]:  # skip header row
+                if not isinstance(row, list):
                     continue
-                last_three = row[-3:]
-                if all((v or "").strip() for v in last_three):
-                    return True
+                total += sum(1 for v in row[1:] if (v or "").strip() not in ("", "—", "–", "-"))
     except Exception:
         pass
-    return False
+    return total
+
+
+def _wait_for_stable_data(driver, timeout=30, stable_for=1.5, poll=0.4):
+    """Poll until the filled-cell count stops changing for `stable_for` seconds.
+
+    Handles both fast-loading companies (count jumps then holds) and genuinely
+    sparse companies (small stable count from the start).
+    """
+    deadline = time.time() + timeout
+    last_count = -1
+    stable_since = None
+    while time.time() < deadline:
+        count = _count_filled_data_cells(driver)
+        if count != last_count:
+            last_count = count
+            stable_since = time.time() if count > 0 else None
+        elif stable_since is not None and time.time() - stable_since >= stable_for:
+            return
+        time.sleep(poll)
 
 
 def _load_page(driver, ticker, slug, multi_table=False):
@@ -379,17 +431,30 @@ def _load_page(driver, ticker, slug, multi_table=False):
         driver.get(f"{URL}{target_path}")
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
 
+    is_404 = driver.execute_script("""
+        var h = document.querySelector('h1[data-sentry-source-file="404.tsx"]');
+        return h ? h.textContent.toLowerCase().includes('sorry, page not found') : false;
+    """)
+    if is_404:
+        raise PageNotFoundError(f"{ticker}: page not found (fiscal.ai 404)")
+
     if slug == "income-statement" and not multi_table:
         ensure_k_units(driver)
 
     quick_missing_check(driver, ticker, timeout=2 if FAST_MODE else 4)
 
-    # Wait until the table data is actually populated (session fully authenticated),
-    # then give React a moment to finish re-rendering before grabbing elements.
-    WebDriverWait(driver, 30).until(_has_populated_data)
-    time.sleep(0.5)
+    # Wait until filled cell count is stable (data has finished loading).
+    _wait_for_stable_data(driver)
 
     if multi_table:
+        table_count = driver.execute_script(
+            "return document.querySelectorAll('[data-sentry-component=\"TableContent\"]').length;"
+        )
+        if table_count >= 3:
+            return extract_all_tables_from_page(driver)
+        if 0 < table_count < 3:
+            raise IncompleteDataError(f"{ticker} {slug}: only {table_count} table(s), expected 3")
+        # table_count == 0: data may still be loading, fall through to timed wait
         WebDriverWait(driver, 15 if FAST_MODE else 20).until(
             lambda d: d.execute_script("""
                 return document.querySelectorAll('[data-sentry-component="TableContent"]').length >= 3;
@@ -489,7 +554,38 @@ def needs_work(ticker_data):
     return not (has_liabilities and has_equity and has_financing)
 
 
+def remove_ticker_from_csv(ticker, csv_path):
+    p = Path(csv_path)
+    if not p.exists():
+        return
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader, None)
+        rows = [r for r in reader if r and r[0].strip() != ticker]
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if header:
+            writer.writerow(header)
+        writer.writerows(rows)
+
+
+def append_to_not_found_csv(ticker, exchange):
+    ensure_parent(NOT_FOUND_CSV)
+    with open(NOT_FOUND_CSV, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow([ticker, exchange])
+
+
+def append_to_incomplete_csv(ticker, exchange):
+    ensure_parent(INCOMPLETE_DATA_CSV)
+    with open(INCOMPLETE_DATA_CSV, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow([ticker, exchange])
+
+
 def classify_error(exc):
+    if isinstance(exc, PageNotFoundError):
+        return "page_not_found"
+    if isinstance(exc, IncompleteDataError):
+        return "incomplete_data"
     s = str(exc).lower()
     if "not found" in s:
         return "ticker_not_found"
@@ -639,11 +735,16 @@ def main():
                             ensure_parent(FAILED_CSV)
                             with open(FAILED_CSV, "a", newline="") as f:
                                 csv.writer(f).writerow([t, exchange, reason_type, reason])
+                        if reason_type == "page_not_found":
+                            remove_ticker_from_csv(t, TICKERS_CSV)
+                            append_to_not_found_csv(t, exchange)
+                        elif reason_type == "incomplete_data":
+                            remove_ticker_from_csv(t, TICKERS_CSV)
+                            append_to_incomplete_csv(t, exchange)
 
                     log_event({"event": "ticker_failed", "ticker": t, "kind": kind,
                                "reason": reason, "reason_type": reason_type}, lock=lock)
-                    print(f"[fail] {t} {reason_type}: {reason[:80]}")
-                    print(traceback.format_exc())
+                    print(f"[fail] {t} {exc.__class__.__name__}: {reason[:120]}")
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(worker_run, i, d, chunk) for i, (d, chunk) in enumerate(zip(drivers, chunks), 1)]

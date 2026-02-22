@@ -62,7 +62,7 @@
 
         <div id="tab-tearsheet-panel">
         <!-- Top Row: Description + Chart -->
-        {% if price_data_json != "[]" %}
+        {% if True %}
         <div class="grid grid-cols-3 gap-6 mb-6">
             <!-- Business Description (1/3) -->
             {% if company.description %}
@@ -351,15 +351,14 @@
         </div>
     </div>
 
-    <!-- Chart initialization -->
+    <!-- Chart initialization — all periods fetched live from API -->
     <script>
         (function() {
+            // Previously: allPriceData / allVolumeData were embedded from the DB (StockPrice model)
+            // and longer periods were filtered client-side via filterByPeriod().
+            // Now all periods call the API endpoint which fetches from yfinance.
+
             const ticker = "{{ company.ticker }}";
-            const allPriceData = {{ price_data_json|safe }};
-            const allVolumeData = {{ volume_data_json|safe }};
-
-            if (allPriceData.length === 0) return;
-
             const container = document.getElementById('chart-container');
             if (!container) return;
 
@@ -369,34 +368,7 @@
             let currentPriceData = [];
             let currentVolumeData = [];
 
-            function filterByPeriod(priceData, volumeData, period) {
-                const now = new Date();
-                let cutoff;
-
-                switch (period) {
-                    case '1m':
-                        cutoff = new Date(now.setMonth(now.getMonth() - 1));
-                        break;
-                    case '6m':
-                        cutoff = new Date(now.setMonth(now.getMonth() - 6));
-                        break;
-                    case '1y':
-                        cutoff = new Date(now.setFullYear(now.getFullYear() - 1));
-                        break;
-                    case '5y':
-                        cutoff = new Date(now.setFullYear(now.getFullYear() - 5));
-                        break;
-                    case 'max':
-                    default:
-                        return { priceData, volumeData };
-                }
-
-                const cutoffStr = cutoff.toISOString().split('T')[0];
-                const filteredPrice = priceData.filter(d => d.time >= cutoffStr);
-                const filteredVolume = volumeData.filter(d => d.time >= cutoffStr);
-
-                return { priceData: filteredPrice, volumeData: filteredVolume };
-            }
+            const intradayPeriods = new Set(['1d', '5d']);
 
             function createChart(priceData, volumeData, chartType, isIntraday = false) {
                 if (chart) {
@@ -461,7 +433,7 @@
                 chart.timeScale().fitContent();
             }
 
-            async function fetchIntraday(period) {
+            async function fetchPrices(period) {
                 try {
                     const response = await fetch(`/companies/${ticker}/prices/${period}/`);
                     const data = await response.json();
@@ -486,18 +458,11 @@
                     }
                 });
 
-                if (period === '1d' || period === '5d') {
-                    const data = await fetchIntraday(period);
-                    if (data && data.price_data.length > 0) {
-                        currentPriceData = data.price_data;
-                        currentVolumeData = data.volume_data;
-                        createChart(currentPriceData, currentVolumeData, currentChartType, true);
-                    }
-                } else {
-                    const filtered = filterByPeriod(allPriceData, allVolumeData, period);
-                    currentPriceData = filtered.priceData;
-                    currentVolumeData = filtered.volumeData;
-                    createChart(currentPriceData, currentVolumeData, currentChartType, false);
+                const data = await fetchPrices(period);
+                if (data && data.price_data.length > 0) {
+                    currentPriceData = data.price_data;
+                    currentVolumeData = data.volume_data;
+                    createChart(currentPriceData, currentVolumeData, currentChartType, intradayPeriods.has(period));
                 }
             }
 
@@ -509,8 +474,7 @@
             if (chartTypeSelect) {
                 chartTypeSelect.addEventListener('change', function() {
                     currentChartType = this.value;
-                    const isIntraday = currentPeriod === '1d' || currentPeriod === '5d';
-                    createChart(currentPriceData, currentVolumeData, currentChartType, isIntraday);
+                    createChart(currentPriceData, currentVolumeData, currentChartType, intradayPeriods.has(currentPeriod));
                 });
             }
 

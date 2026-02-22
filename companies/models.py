@@ -192,7 +192,7 @@ class Financial(models.Model):
         "CF": "Cash Flow",
     }
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="financials")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="financials", db_index=False)
     period_end_date = models.DateField()
     statement = models.CharField(max_length=2, choices=STATEMENT_CHOICES)
     metric = models.CharField(max_length=100)
@@ -209,10 +209,7 @@ class Financial(models.Model):
             )
         ]
 
-        indexes = [
-            models.Index(fields=["company", "period_end_date"]),
-            models.Index(fields=["company", "statement", "metric"])
-        ]
+        indexes = []
 
     def __str__(self) -> str:
         return f"{self.company.ticker} {self.period_end_date} {self.metric} {self.value}"

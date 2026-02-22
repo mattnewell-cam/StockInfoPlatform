@@ -916,28 +916,21 @@ class CompanyDetailView(DetailView):
         ctx["BS_table"] = pivot_fiscal_items(bs_items)
         ctx["CF_table"] = pivot_fiscal_items(cf_items)
 
-        # Price data for chart
-        prices = StockPrice.objects.filter(company=self.object).order_by('date')
-        price_data = [
-            {
-                "time": p.date.isoformat(),
-                "open": float(p.open),
-                "high": float(p.high),
-                "low": float(p.low),
-                "close": float(p.close),
-            }
-            for p in prices
-        ]
-        volume_data = [
-            {
-                "time": p.date.isoformat(),
-                "value": p.volume,
-                "color": "#26a69a" if p.close >= p.open else "#ef5350"
-            }
-            for p in prices
-        ]
-        ctx["price_data_json"] = json.dumps(price_data)
-        ctx["volume_data_json"] = json.dumps(volume_data)
+        # Price data for chart — now fetched live via API (see intraday_prices view)
+        # (Previously loaded from StockPrice DB records — kept for reference)
+        # prices = StockPrice.objects.filter(company=self.object).order_by('date')
+        # price_data = [
+        #     {"time": p.date.isoformat(), "open": float(p.open), "high": float(p.high),
+        #      "low": float(p.low), "close": float(p.close)}
+        #     for p in prices
+        # ]
+        # volume_data = [
+        #     {"time": p.date.isoformat(), "value": p.volume,
+        #      "color": "#26a69a" if p.close >= p.open else "#ef5350"}
+        #     for p in prices
+        # ]
+        # ctx["price_data_json"] = json.dumps(price_data)
+        # ctx["volume_data_json"] = json.dumps(volume_data)
 
         # Notes for logged-in users
         if self.request.user.is_authenticated:
@@ -1280,7 +1273,7 @@ def chat_session_delete(request, ticker, session_id):
 
 
 def intraday_prices(request, ticker, period):
-    """Fetch intraday prices from yfinance for 1D/5D views."""
+    """Fetch prices from yfinance for all chart periods."""
     try:
         company = Company.objects.get(ticker=ticker)
     except Company.DoesNotExist:
@@ -1288,10 +1281,16 @@ def intraday_prices(request, ticker, period):
 
     yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
 
-    # Map period to yfinance parameters
+    # Map period to yfinance parameters.
+    # Intraday periods use Unix timestamps; daily/weekly/monthly use date strings.
     period_config = {
-        "1d": {"period": "1d", "interval": "5m"},
-        "5d": {"period": "5d", "interval": "15m"},
+        "1d":  {"period": "1d",   "interval": "5m",  "intraday": True},
+        "5d":  {"period": "5d",   "interval": "15m", "intraday": True},
+        "1m":  {"period": "1mo",  "interval": "1d",  "intraday": False},
+        "6m":  {"period": "6mo",  "interval": "1d",  "intraday": False},
+        "1y":  {"period": "1y",   "interval": "1d",  "intraday": False},
+        "5y":  {"period": "5y",   "interval": "1wk", "intraday": False},
+        "max": {"period": "max",  "interval": "1mo", "intraday": False},
     }
 
     if period not in period_config:
@@ -1309,11 +1308,14 @@ def intraday_prices(request, ticker, period):
         volume_data = []
 
         for idx, row in df.iterrows():
-            # Convert to Unix timestamp for Lightweight Charts
-            timestamp = int(idx.timestamp())
+            if config["intraday"]:
+                time_val = int(idx.timestamp())
+            else:
+                # Date string for daily/weekly/monthly (Lightweight Charts accepts "YYYY-MM-DD")
+                time_val = idx.date().isoformat() if hasattr(idx, 'date') else str(idx)[:10]
 
             price_data.append({
-                "time": timestamp,
+                "time": time_val,
                 "open": float(row["Open"]),
                 "high": float(row["High"]),
                 "low": float(row["Low"]),
@@ -1321,7 +1323,7 @@ def intraday_prices(request, ticker, period):
             })
 
             volume_data.append({
-                "time": timestamp,
+                "time": time_val,
                 "value": int(row["Volume"]),
                 "color": "#26a69a" if row["Close"] >= row["Open"] else "#ef5350"
             })
@@ -1651,13 +1653,37 @@ def screener_run(request):
 
     # If there's a natural language query, use OpenAI to generate SQL
     if nl_query:
-        sql, error = generate_screener_sql(nl_query)
-        if error:
-            return JsonResponse({"error": error}, status=400)
+        sql = ""
+        last_error = ""
+        retry_context = ""
+        results = []
 
-        results, exec_error = execute_screener_query(sql)
-        if exec_error:
-            return JsonResponse({"error": exec_error, "generated_sql": sql}, status=400)
+        for attempt in range(2):
+            sql, error = generate_screener_sql(nl_query, retry_context=retry_context)
+            if error:
+                last_error = error
+                retry_context = error
+                continue
+
+            results, exec_error = execute_screener_query(sql)
+            if exec_error:
+                last_error = exec_error
+                retry_context = f"The SQL caused this database error: {exec_error}"
+                continue
+
+            if results:
+                missing = [col for col in ("id", "ticker", "name") if col not in results[0]]
+                if missing:
+                    last_error = f"Query missing required columns: {', '.join(missing)}"
+                    retry_context = (
+                        f"Your query was missing these required columns: {', '.join(missing)}. "
+                        "Always include c.id, c.ticker, c.name in the SELECT."
+                    )
+                    continue
+
+            break  # success
+        else:
+            return JsonResponse({"error": last_error}, status=400)
 
         # Enrich results with company data for filtering
         company_ids = [r.get("id") for r in results if r.get("id")]

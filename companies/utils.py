@@ -133,10 +133,11 @@ def execute_screener_query(sql: str, limit: int = 100) -> tuple[list[dict], str]
         return [], str(e)
 
 
-def generate_screener_sql(nl_query: str) -> tuple[str, str]:
+def generate_screener_sql(nl_query: str, retry_context: str = "") -> tuple[str, str]:
     """
     Generate SQL from natural language query using OpenAI.
     Returns (sql, error_message).
+    Pass retry_context to feed a previous error back to the model on retry.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -223,6 +224,7 @@ Rules:
 5. Only use SELECT statements - no INSERT, UPDATE, DELETE, etc.
 6. IMPORTANT: This is SQLite - use CAST(value AS REAL) for division to avoid integer division
 7. Return ONLY the SQL query, no explanation
+8. If the input is not a financial screening request (e.g. a greeting, unrelated question), respond with exactly: NOT_A_SCREENER_QUERY
 """
 
     few_shot_examples = """
@@ -301,12 +303,18 @@ WHERE g.value > 0
                 },
                 {
                     "role": "user",
-                    "content": nl_query
+                    "content": nl_query if not retry_context else (
+                        f"{nl_query}\n\nYour previous attempt failed with this error: {retry_context}\n"
+                        "Please fix the SQL and try again."
+                    ),
                 }
             ],
         )
 
         sql = response.output_text.strip()
+
+        if sql == "NOT_A_SCREENER_QUERY":
+            return "", "Please enter a financial screening query, e.g. 'companies with revenue growth over 20% last year'."
 
         # Clean up markdown code blocks if present
         if sql.startswith("```sql"):
