@@ -437,10 +437,15 @@ def _wait_for_complete_is_table(driver, timeout=15, poll=0.1, max_empty_ratio=0.
             if (!rows || rows.length < 2) return [false, nf];
             var headerCells = rows[0].querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
             var colCount = headerCells ? headerCells.length : 0;
-            if (colCount < 2) return [false, nf];
-            function isParentRow(r) {
-                return r.classList.contains('parent-item') || r.querySelector('.parent-item');
+            if (colCount >= 2) {
+                var lastDataCol = 1;
+                for (var h = 1; h < headerCells.length; h++) {
+                    var ht = (headerCells[h].innerText || headerCells[h].textContent || '').trim();
+                    if (ht && ht !== '-' && ht !== '—' && ht !== '–') lastDataCol = h;
+                }
+                colCount = lastDataCol + 1;
             }
+            if (colCount < 2) return [false, nf];
             function isValue(v) {
                 if (!v) return false;
                 var t = ('' + v).trim();
@@ -451,11 +456,16 @@ def _wait_for_complete_is_table(driver, timeout=15, poll=0.1, max_empty_ratio=0.
             var empty = 0;
             for (var i = 1; i < rows.length; i++) {
                 var r = rows[i];
-                if (!isParentRow(r)) continue;
                 var cells = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
+                var hasReal = false;
                 for (var c = 1; c < Math.min(cells.length, colCount); c++) {
+                    if (isValue(cells[c].innerText || cells[c].textContent)) { hasReal = true; break; }
+                }
+                if (!hasReal) continue;
+                for (var c2 = 1; c2 < colCount; c2++) {
                     total++;
-                    if (!isValue(cells[c].innerText || cells[c].textContent)) empty++;
+                    var cell = (c2 < cells.length) ? cells[c2] : null;
+                    if (!cell || !isValue(cell.innerText || cell.textContent)) empty++;
                 }
             }
             if (total === 0) return [false, nf];
@@ -472,6 +482,8 @@ def _wait_for_complete_is_table(driver, timeout=15, poll=0.1, max_empty_ratio=0.
 
 def _load_page(driver, ticker, slug, multi_table=False):
     """Navigate to a fiscal statement page and extract table(s), waiting for data to be populated."""
+    t0 = time.perf_counter()
+    debug_cf = (slug == "cash-flow-statement")
     target_path = f"/company/{ticker}/financials/{slug}/annual/"
     if f"/company/{ticker}/" in (driver.current_url or "") and slug not in (driver.current_url or ""):
         nav_links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="/company/{ticker}/financials/{slug}/"]')
@@ -483,6 +495,8 @@ def _load_page(driver, ticker, slug, multi_table=False):
     else:
         driver.get(f"{URL}{target_path}")
     wait_for(driver, By.TAG_NAME, "body", timeout=15)
+    if debug_cf:
+        print(f"  [cf timing] after nav+body: {time.perf_counter() - t0:.3f}s")
 
     is_404 = driver.execute_script("""
         var h = document.querySelector('h1[data-sentry-source-file="404.tsx"]');
@@ -492,11 +506,15 @@ def _load_page(driver, ticker, slug, multi_table=False):
         raise PageNotFoundError(f"{ticker}: page not found (fiscal.ai 404)")
 
     quick_missing_check(driver, ticker, timeout=2 if FAST_MODE else 4)
+    if debug_cf:
+        print(f"  [cf timing] after missing_check: {time.perf_counter() - t0:.3f}s")
 
     if slug == "income-statement" and not multi_table:
         ensure_k_units(driver)
 
     if multi_table:
+        if debug_cf:
+            print(f"  [cf timing] enter multi_table: {time.perf_counter() - t0:.3f}s")
         # Poll until count reaches 3 (done) or stabilises below 3 (incomplete company).
         # Also bail immediately if error text appears in the page body.
         deadline = time.time() + (15 if FAST_MODE else 20)
@@ -511,7 +529,13 @@ def _load_page(driver, ticker, slug, multi_table=False):
             if not_found:
                 raise PageNotFoundError(f"{ticker}: not found or data unavailable")
             if count >= 3:
-                return extract_all_tables_from_page(driver)
+                if debug_cf:
+                    print(f"  [cf timing] count>=3: {time.perf_counter() - t0:.3f}s")
+                t_extract = time.perf_counter()
+                tables = extract_all_tables_from_page(driver)
+                if debug_cf:
+                    print(f"  [cf timing] extract_all_tables: {time.perf_counter() - t_extract:.3f}s")
+                return tables
             if count != last_count:
                 last_count = count
                 stable_since = time.time() if count > 0 else None

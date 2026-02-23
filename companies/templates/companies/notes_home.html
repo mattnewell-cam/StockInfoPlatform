@@ -43,7 +43,7 @@
                 </button>
             </div>
             {% for company in companies %}
-            <a href="/notes/{{ company.ticker }}/" class="block border border-gray-100 rounded-lg p-4 bg-white shadow-sm hover:border-blue-200 hover:bg-blue-50/30">
+            <a href="/notes/{{ company.exchange }}-{{ company.ticker }}/" class="block border border-gray-100 rounded-lg p-4 bg-white shadow-sm hover:border-blue-200 hover:bg-blue-50/30">
                 <div class="text-sm font-semibold text-gray-900">{{ company.name }}</div>
                 <div class="text-xs text-gray-500 mt-1">{{ company.ticker }}</div>
                 <div class="text-xs text-gray-500 italic mt-1">{{ company.note_count }} notes</div>
@@ -80,7 +80,7 @@
                 if (data.length === 0) { results.classList.add('hidden'); return; }
 
                 results.innerHTML = data.map(c =>
-                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                    `<li><a href="/companies/${c.exchange}-${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
                         <span class="font-medium text-gray-900">${c.ticker}</span>
                         <span class="text-gray-500">${c.name}</span>
                     </a></li>`
@@ -127,7 +127,7 @@
                 if (data.length === 0) { results.classList.add('hidden'); return; }
 
                 results.innerHTML = data.map(c =>
-                    `<li><button class="w-full text-left px-4 py-3 hover:bg-gray-50 add-company-item" data-ticker="${c.ticker}">
+                    `<li><button class="w-full text-left px-4 py-3 hover:bg-gray-50 add-company-item" data-slug="${c.exchange}-${c.ticker}">
                         <span class="font-medium text-gray-900">${c.ticker}</span>
                         <span class="text-gray-500">${c.name}</span>
                     </button></li>`
@@ -138,14 +138,14 @@
             results.addEventListener('click', async (event) => {
                 const btn = event.target.closest('.add-company-item');
                 if (!btn) return;
-                const ticker = btn.dataset.ticker;
+                const slug = btn.dataset.slug;
                 const response = await fetch('/notes/add-company/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({ ticker })
+                    body: JSON.stringify({ slug })
                 });
                 const data = await response.json();
                 if (!response.ok) {
@@ -153,7 +153,7 @@
                     return;
                 }
                 closeModal();
-                window.location.href = `/notes/${data.ticker}/`;
+                window.location.href = `/notes/${data.slug}/`;
             });
         })();
     </script>

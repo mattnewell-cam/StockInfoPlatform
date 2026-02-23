@@ -97,7 +97,7 @@
                 if (data.length === 0) { results.classList.add('hidden'); return; }
 
                 results.innerHTML = data.map(c =>
-                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                    `<li><a href="/companies/${c.exchange}-${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
                         <span class="font-medium text-gray-900">${c.ticker}</span>
                         <span class="text-gray-500">${c.name}</span>
                     </a></li>`
@@ -182,7 +182,7 @@
                 }
 
                 try {
-                    const response = await fetch(`/companies/{{ company.ticker }}/notes/add/`, {
+                    const response = await fetch(`/companies/{{ company.exchange }}-{{ company.ticker }}/notes/add/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

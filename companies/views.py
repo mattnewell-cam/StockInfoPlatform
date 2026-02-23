@@ -22,6 +22,12 @@ from django.db.models import Count, Q as DQ
 from companies.models import DiscussionThread, DiscussionMessage, ChatSession, ChatMessage, NoteCompany
 
 
+def _get_company_by_slug(slug):
+    """Parse an EXCHANGE-TICKER slug and return the matching Company."""
+    exchange, _, ticker = slug.partition('-')
+    return Company.objects.get(exchange=exchange, ticker=ticker)
+
+
 ROBOTS_TXT = """\
 User-agent: GPTBot
 Disallow: /
@@ -122,7 +128,7 @@ def search_api(request):
     if not q:
         return JsonResponse([], safe=False)
     results = Company.objects.filter(Q(name__icontains=q) | Q(ticker__icontains=q))[:10]
-    return JsonResponse([{'ticker': c.ticker, 'name': c.name} for c in results], safe=False)
+    return JsonResponse([{'ticker': c.ticker, 'exchange': c.exchange, 'name': c.name} for c in results], safe=False)
 
 
 def _load_alert_type_names():
@@ -145,9 +151,9 @@ def _load_alert_type_names():
 
 @login_required
 @require_POST
-def follow_company(request, ticker):
+def follow_company(request, slug):
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -168,9 +174,9 @@ def follow_company(request, ticker):
 
 @login_required
 @require_POST
-def unfollow_company(request, ticker):
+def unfollow_company(request, slug):
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -216,9 +222,9 @@ def notification_mark_read(request, notification_id):
 
 
 @login_required
-def alert_preferences(request, ticker):
+def alert_preferences(request, slug):
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -323,10 +329,10 @@ def newsfeed_api(request):
     return JsonResponse({"items": items, "type_map": type_map})
 
 
-def regulatory_newsfeed(request, ticker):
+def regulatory_newsfeed(request, slug):
     """Fetch FCA NSM filings for a company (paged)."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -893,8 +899,9 @@ class CompanyDetailView(DetailView):
     model = Company
     template_name = "companies/company_detail.html"
     context_object_name = "company"
-    slug_field = "ticker"        # model field to query
-    slug_url_kwarg = "ticker"    # URL kwarg name
+
+    def get_object(self, queryset=None):
+        return _get_company_by_slug(self.kwargs["slug"])
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -955,10 +962,10 @@ def _window_start(window):
     return None
 
 
-def discussion_threads(request, ticker):
+def discussion_threads(request, slug):
     """List discussion threads for a company."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -991,10 +998,10 @@ def discussion_threads(request, ticker):
     return JsonResponse({"threads": threads})
 
 
-def discussion_messages(request, ticker):
+def discussion_messages(request, slug):
     """List all discussion messages for a company."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1015,10 +1022,10 @@ def discussion_messages(request, ticker):
     return JsonResponse({"messages": items})
 
 
-def discussion_thread_messages(request, ticker, thread_id):
+def discussion_thread_messages(request, slug, thread_id):
     """List messages for a single thread."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1046,10 +1053,10 @@ def discussion_thread_messages(request, ticker, thread_id):
 
 
 @login_required
-def chat_sessions(request, ticker):
+def chat_sessions(request, slug):
     """List or create chat sessions for a company."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1084,10 +1091,10 @@ def chat_sessions(request, ticker):
 
 
 @login_required
-def chat_session_messages(request, ticker, session_id):
+def chat_session_messages(request, slug, session_id):
     """List messages for a chat session."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1116,10 +1123,10 @@ def chat_session_messages(request, ticker, session_id):
 
 @login_required
 @require_POST
-def chat_send_message(request, ticker, session_id):
+def chat_send_message(request, slug, session_id):
     """Send a message to a chat session and get assistant reply."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1223,10 +1230,10 @@ def chat_send_message(request, ticker, session_id):
 
 
 @login_required
-def chat_session_rename(request, ticker, session_id):
+def chat_session_rename(request, slug, session_id):
     """Rename a chat session."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1253,10 +1260,10 @@ def chat_session_rename(request, ticker, session_id):
 
 
 @login_required
-def chat_session_delete(request, ticker, session_id):
+def chat_session_delete(request, slug, session_id):
     """Delete a chat session."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1272,10 +1279,10 @@ def chat_session_delete(request, ticker, session_id):
     return JsonResponse({"ok": True})
 
 
-def intraday_prices(request, ticker, period):
+def intraday_prices(request, slug, period):
     """Fetch prices from yfinance for all chart periods."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1336,10 +1343,10 @@ def intraday_prices(request, ticker, period):
 
 @login_required
 @require_POST
-def add_note(request, ticker):
+def add_note(request, slug):
     """Add a note for a company."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1390,9 +1397,9 @@ def notes_home(request):
 
 
 @login_required
-def notes_company(request, ticker):
+def notes_company(request, slug):
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return redirect("notes_home")
 
@@ -1413,28 +1420,28 @@ def notes_add_company(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    ticker = (data.get("ticker") or "").strip()
-    if not ticker:
-        return JsonResponse({"error": "Ticker is required"}, status=400)
+    slug = (data.get("slug") or "").strip()
+    if not slug:
+        return JsonResponse({"error": "Slug is required"}, status=400)
 
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
     NoteCompany.objects.get_or_create(user=request.user, company=company)
     return JsonResponse({
-        "ticker": company.ticker,
+        "slug": f"{company.exchange}-{company.ticker}",
         "name": company.name,
     })
 
 
 @login_required
 @require_POST
-def add_thread(request, ticker):
+def add_thread(request, slug):
     """Create a new discussion thread with opening message."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 
@@ -1472,10 +1479,10 @@ def add_thread(request, ticker):
 
 @login_required
 @require_POST
-def add_message(request, ticker, thread_id):
+def add_message(request, slug, thread_id):
     """Add a reply to a discussion thread."""
     try:
-        company = Company.objects.get(ticker=ticker)
+        company = _get_company_by_slug(slug)
     except Company.DoesNotExist:
         return JsonResponse({"error": "Company not found"}, status=404)
 

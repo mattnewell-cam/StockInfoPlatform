@@ -358,7 +358,7 @@
             // and longer periods were filtered client-side via filterByPeriod().
             // Now all periods call the API endpoint which fetches from yfinance.
 
-            const ticker = "{{ company.ticker }}";
+            const slug = "{{ company.exchange }}-{{ company.ticker }}";
             const container = document.getElementById('chart-container');
             if (!container) return;
 
@@ -435,7 +435,7 @@
 
             async function fetchPrices(period) {
                 try {
-                    const response = await fetch(`/companies/${ticker}/prices/${period}/`);
+                    const response = await fetch(`/companies/${slug}/prices/${period}/`);
                     const data = await response.json();
                     if (data.error) {
                         console.error(data.error);
@@ -531,7 +531,7 @@
     <script>
         // Notes functionality
         (function() {
-            const ticker = "{{ company.ticker }}";
+            const slug = "{{ company.exchange }}-{{ company.ticker }}";
             const addBtn = document.getElementById('add-note-btn');
             const titleInput = document.getElementById('note-title');
             const contentInput = document.getElementById('note-content');
@@ -606,7 +606,7 @@
                 }
 
                 try {
-                    const response = await fetch(`/companies/${ticker}/notes/add/`, {
+                    const response = await fetch(`/companies/${slug}/notes/add/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -666,7 +666,7 @@
             const typeDropdown = document.getElementById('news-type-dropdown');
             if (!newsList || !newsMeta || !typeFilter || !typeSelectAll || !prevBtn || !nextBtn || !typeToggle || !typeDropdown) return;
 
-            const endpoint = `/companies/{{ company.ticker }}/news/`;
+            const endpoint = `/companies/{{ company.exchange }}-{{ company.ticker }}/news/`;
             const pageSize = 20;
             let typeMap = {};  // type_code -> display name
             let offset = 0;
@@ -857,7 +857,7 @@
     </script>
     <script>
         (function() {
-            const ticker = "{{ company.ticker }}";
+            const slug = "{{ company.exchange }}-{{ company.ticker }}";
             const threadsList = document.getElementById('discussion-thread-list');
             const messagesList = document.getElementById('discussion-message-list');
             const threadDetail = document.getElementById('discussion-thread-detail');
@@ -892,7 +892,7 @@
             }
 
             async function loadThreads() {
-                const url = new URL(`/companies/${ticker}/discussion/threads/`, window.location.origin);
+                const url = new URL(`/companies/${slug}/discussion/threads/`, window.location.origin);
                 url.searchParams.set('sort', sortSelect.value);
                 url.searchParams.set('window', windowSelect.value);
                 const response = await fetch(url.toString());
@@ -920,7 +920,7 @@
             }
 
             async function loadMessages() {
-                const url = new URL(`/companies/${ticker}/discussion/messages/`, window.location.origin);
+                const url = new URL(`/companies/${slug}/discussion/messages/`, window.location.origin);
                 const response = await fetch(url.toString());
                 const data = await response.json();
                 if (!response.ok) {
@@ -984,7 +984,7 @@
                         alert('Please enter a title and message.');
                         return;
                     }
-                    const response = await fetch(`/companies/${ticker}/discussion/threads/add/`, {
+                    const response = await fetch(`/companies/${slug}/discussion/threads/add/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1006,7 +1006,7 @@
 
             async function openThread(threadId) {
                 activeThreadId = threadId;
-                const response = await fetch(`/companies/${ticker}/discussion/threads/${threadId}/`);
+                const response = await fetch(`/companies/${slug}/discussion/threads/${threadId}/`);
                 const data = await response.json();
                 if (!response.ok) {
                     alert(data.error || 'Failed to load thread.');
@@ -1055,7 +1055,7 @@
                         alert('Please enter a reply.');
                         return;
                     }
-                    const response = await fetch(`/companies/${ticker}/discussion/threads/${activeThreadId}/messages/add/`, {
+                    const response = await fetch(`/companies/${slug}/discussion/threads/${activeThreadId}/messages/add/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1069,7 +1069,7 @@
                         return;
                     }
                     threadReplyContent.value = '';
-                    const refreshed = await fetch(`/companies/${ticker}/discussion/threads/${activeThreadId}/`);
+                    const refreshed = await fetch(`/companies/${slug}/discussion/threads/${activeThreadId}/`);
                     const refreshedData = await refreshed.json();
                     if (refreshed.ok && threadDetailMessages) {
                         if (!refreshedData.messages || refreshedData.messages.length === 0) {
@@ -1145,7 +1145,7 @@
     </script>
     <script>
         (function() {
-            const ticker = "{{ company.ticker }}";
+            const slug = "{{ company.exchange }}-{{ company.ticker }}";
             const sessionList = document.getElementById('chat-session-list');
             const messagesEl = document.getElementById('chat-messages');
             const sendBtn = document.getElementById('chat-send');
@@ -1178,7 +1178,7 @@
 
             async function loadSessions() {
                 try {
-                    const response = await fetch(`/companies/${ticker}/chat/sessions/`);
+                    const response = await fetch(`/companies/${slug}/chat/sessions/`);
                     const data = await response.json();
                     if (!response.ok) {
                         sessionList.innerHTML = '<p class="text-xs text-gray-500">Failed to load chats.</p>';
@@ -1212,7 +1212,7 @@
 
             async function loadMessages(sessionId) {
                 if (!sessionId) return;
-                const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/`);
+                const response = await fetch(`/companies/${slug}/chat/sessions/${sessionId}/`);
                 const data = await response.json();
                 if (!response.ok) {
                     messagesEl.innerHTML = '<p class="text-sm text-gray-500">Failed to load messages.</p>';
@@ -1270,7 +1270,7 @@
                         if (menuBtn) menuBtn.style.display = '';
                         return;
                     }
-                    const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/rename/`, {
+                    const response = await fetch(`/companies/${slug}/chat/sessions/${sessionId}/rename/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                         body: JSON.stringify({ title: newTitle })
@@ -1298,7 +1298,7 @@
 
             async function deleteSession(sessionId) {
                 if (!confirm('Delete this chat? This cannot be undone.')) return;
-                const response = await fetch(`/companies/${ticker}/chat/sessions/${sessionId}/delete/`, {
+                const response = await fetch(`/companies/${slug}/chat/sessions/${sessionId}/delete/`, {
                     method: 'DELETE',
                     headers: { 'X-CSRFToken': '{{ csrf_token }}' }
                 });
@@ -1343,7 +1343,7 @@
             document.addEventListener('click', closeMenu);
 
             async function createSession() {
-                const response = await fetch(`/companies/${ticker}/chat/sessions/`, {
+                const response = await fetch(`/companies/${slug}/chat/sessions/`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1388,7 +1388,7 @@
                 messagesEl.scrollTop = messagesEl.scrollHeight;
 
                 try {
-                    const response = await fetch(`/companies/${ticker}/chat/sessions/${activeSessionId}/send/`, {
+                    const response = await fetch(`/companies/${slug}/chat/sessions/${activeSessionId}/send/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1465,7 +1465,7 @@
                 if (data.length === 0) { results.classList.add('hidden'); return; }
 
                 results.innerHTML = data.map(c =>
-                    `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                    `<li><a href="/companies/${c.exchange}-${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
                         <span class="font-medium text-gray-900">${c.ticker}</span>
                         <span class="text-gray-500">${c.name}</span>
                     </a></li>`

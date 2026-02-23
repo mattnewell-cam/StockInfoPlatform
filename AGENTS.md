@@ -74,6 +74,7 @@ python manage.py update_prices --ticker TICKER --full --years 10
 ## Environment
 
 - `.env` loaded via python-dotenv
+- You may inspect `.env` when needed for troubleshooting or configuration checks
 - `EMAIL_API_KEY` required for verification emails
 - `OPENAI_API_KEY` required for in-app chat (optionally `OPENAI_MODEL`)
 - OpenAI key required for `scripts/generate_AI_summaries.py` (currently hardcoded)

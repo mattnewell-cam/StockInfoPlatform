@@ -358,7 +358,8 @@
 
                             // Make ticker a link
                             if (col === 'ticker' && value) {
-                                return `<td class="px-4 py-3 text-sm"><a href="/companies/${escapeHtml(value)}/" class="text-blue-600 hover:text-blue-800 font-medium">${escapeHtml(value)}</a></td>`;
+                                const companySlug = (result.exchange ? result.exchange + '-' : '') + value;
+                                return `<td class="px-4 py-3 text-sm"><a href="/companies/${escapeHtml(companySlug)}/" class="text-blue-600 hover:text-blue-800 font-medium">${escapeHtml(value)}</a></td>`;
                             }
 
                             return `<td class="px-4 py-3 text-sm ${isNumeric ? 'text-right' : ''}">${value !== null && value !== undefined ? escapeHtml(value) : 'N/A'}</td>`;
@@ -372,7 +373,8 @@
                         if (e.target.tagName === 'A') return;
                         const result = results.find(r => r.id == row.dataset.id);
                         if (result && result.ticker) {
-                            window.location.href = '/companies/' + result.ticker + '/';
+                            const companySlug = (result.exchange ? result.exchange + '-' : '') + result.ticker;
+                            window.location.href = '/companies/' + companySlug + '/';
                         }
                     });
                 });
@@ -736,7 +738,7 @@
                     if (data.length === 0) { headerResults.classList.add('hidden'); return; }
 
                     headerResults.innerHTML = data.map(c =>
-                        `<li><a href="/companies/${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
+                        `<li><a href="/companies/${c.exchange}-${c.ticker}/" class="block px-4 py-3 hover:bg-gray-50">
                             <span class="font-medium text-gray-900">${c.ticker}</span>
                             <span class="text-gray-500">${c.name}</span>
                         </a></li>`

@@ -95,6 +95,9 @@ DEFAULT_FILES = [
     'data/all_us_financials.json',
 ]
 
+# DecimalField(max_digits=20, decimal_places=6) => abs(value) must be < 10^14
+MAX_ABS_VALUE = 1e14
+
 
 class Command(BaseCommand):
     help = "Load financials from cached_financials_uk.json and data/all_us_financials.json."
@@ -147,8 +150,9 @@ class Command(BaseCommand):
 
             tickers_to_process = [single_ticker] if single_ticker else list(data.keys())
             total = len(tickers_to_process)
+            metric_map = self._preload_metrics(data, tickers_to_process, dry_run)
             _created, _updated, _failed = self._process_file(
-                data, tickers_to_process, total, skip_create, dry_run
+                data, tickers_to_process, total, skip_create, dry_run, metric_map
             )
             created_companies += _created
             updated_companies += _updated
@@ -160,7 +164,37 @@ class Command(BaseCommand):
             f"Companies updated: {updated_companies}, Failed: {failed}"
         ))
 
-    def _process_file(self, data, tickers_to_process, total, skip_create, dry_run):
+    def _preload_metrics(self, data, tickers_to_process, dry_run):
+        # Preload metrics once per file to avoid burning the sequence with
+        # per-ticker bulk_create(..., ignore_conflicts=True) in Postgres.
+        raw_metric_names = set()
+        for raw_ticker in tickers_to_process:
+            ticker_data = data.get(raw_ticker)
+            if not ticker_data:
+                continue
+            for statement in ['IS', 'BS', 'CF']:
+                for row in ticker_data.get(statement, [])[1:]:
+                    if row and row[0] and row[0] not in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
+                        raw_metric_names.add(row[0])
+
+        if not raw_metric_names:
+            return {}
+
+        if not dry_run:
+            FinancialMetric.objects.bulk_create(
+                [FinancialMetric(name=n) for n in raw_metric_names], ignore_conflicts=True
+            )
+            metric_qs = FinancialMetric.objects.filter(name__in=raw_metric_names)
+            return {m.name: m for m in metric_qs}
+
+        # Dry-run: include placeholders for missing metrics so counts are accurate.
+        existing = {m.name: m for m in FinancialMetric.objects.filter(name__in=raw_metric_names)}
+        for name in raw_metric_names:
+            if name not in existing:
+                existing[name] = FinancialMetric(name=name)
+        return existing
+
+    def _process_file(self, data, tickers_to_process, total, skip_create, dry_run, metric_map):
         created_companies = 0
         updated_companies = 0
         failed = 0
@@ -206,18 +240,8 @@ class Command(BaseCommand):
             elif not OVERWRITE and company.financials.exists():
                 self.stdout.write(f"  Already has financials, skipping")
                 continue
-            # Collect all metric names for this ticker first, bulk get-or-create
-            raw_metric_names = set()
-            for statement in ['IS', 'BS', 'CF']:
-                for row in ticker_data.get(statement, [])[1:]:
-                    if row and row[0] and row[0] not in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
-                        raw_metric_names.add(row[0])
-            FinancialMetric.objects.bulk_create(
-                [FinancialMetric(name=n) for n in raw_metric_names], ignore_conflicts=True
-            )
-            metric_map = {m.name: m for m in FinancialMetric.objects.filter(name__in=raw_metric_names)}
-
             entries = []
+            skipped_overflow = 0
 
             for statement in ['IS', 'BS', 'CF']:
                 if statement not in ticker_data:
@@ -283,6 +307,9 @@ class Command(BaseCommand):
                                 continue
 
                         value = parse_value(value_str)
+                        if abs(value) >= MAX_ABS_VALUE:
+                            skipped_overflow += 1
+                            continue
 
                         entries.append(Financial(
                             company=company,
@@ -301,6 +328,11 @@ class Command(BaseCommand):
                     updated_companies += 1
             else:
                 self.stdout.write(f"  No financial entries to create")
+
+            if skipped_overflow:
+                self.stdout.write(self.style.WARNING(
+                    f"  Skipped {skipped_overflow} values outside Decimal range"
+                ))
 
         return created_companies, updated_companies, failed
 
