@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from companies.models import Company, Financial
+from companies.models import Company, Financial, FinancialMetric
 from companies.utils import end_of_month
 import json
 import re
@@ -206,6 +206,17 @@ class Command(BaseCommand):
             elif not OVERWRITE and company.financials.exists():
                 self.stdout.write(f"  Already has financials, skipping")
                 continue
+            # Collect all metric names for this ticker first, bulk get-or-create
+            raw_metric_names = set()
+            for statement in ['IS', 'BS', 'CF']:
+                for row in ticker_data.get(statement, [])[1:]:
+                    if row and row[0] and row[0] not in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
+                        raw_metric_names.add(row[0])
+            FinancialMetric.objects.bulk_create(
+                [FinancialMetric(name=n) for n in raw_metric_names], ignore_conflicts=True
+            )
+            metric_map = {m.name: m for m in FinancialMetric.objects.filter(name__in=raw_metric_names)}
+
             entries = []
 
             for statement in ['IS', 'BS', 'CF']:
@@ -226,8 +237,11 @@ class Command(BaseCommand):
                     if not row:
                         continue
 
-                    metric = row[0]
-                    if not metric or metric in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
+                    metric_name = row[0]
+                    if not metric_name or metric_name in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
+                        continue
+                    metric_obj = metric_map.get(metric_name)
+                    if not metric_obj:
                         continue
 
                     for val_idx, value_str in enumerate(row[1:]):
@@ -274,9 +288,8 @@ class Command(BaseCommand):
                             company=company,
                             period_end_date=period_end_date,
                             statement=statement,
-                            metric=metric,
+                            metric=metric_obj,
                             value=value,
-                            currency=company.currency
                         ))
 
             if entries:

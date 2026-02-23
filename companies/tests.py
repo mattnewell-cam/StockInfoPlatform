@@ -8,7 +8,7 @@ from django.contrib.auth.models import AnonymousUser, User
 from django.core.management import call_command
 from django.test import RequestFactory, TestCase
 
-from companies.models import Company, Financial, Follow, Notification
+from companies.models import Company, Financial, FinancialMetric, Follow, Notification
 from companies.utils import normalize_exchange, yfinance_symbol
 from companies.views import (
     CompanyDetailView,
@@ -44,13 +44,13 @@ class CompanyDetailFiscalPipelineTests(TestCase):
         )
 
     def _add_financial(self, statement, metric, period_end_date, value):
+        metric_obj, _ = FinancialMetric.objects.get_or_create(name=metric)
         Financial.objects.create(
             company=self.company,
             statement=statement,
-            metric=metric,
+            metric=metric_obj,
             period_end_date=period_end_date,
             value=value,
-            currency="GBP",
         )
 
     def test_detail_view_uses_fiscal_transformations(self):

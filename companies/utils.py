@@ -159,14 +159,18 @@ Table: companies_company (alias: c)
 - shares_outstanding: BIGINT - Number of shares outstanding
 - FYE_month: SMALLINT - Fiscal year end month (1-12)
 
+Table: companies_financialmetric (alias: m)
+- id: SMALLINT PRIMARY KEY
+- name: VARCHAR(255) - Name of the financial metric
+
 Table: companies_financial (alias: f)
 - id: INTEGER PRIMARY KEY
 - company_id: INTEGER FOREIGN KEY -> companies_company.id
 - period_end_date: DATE - End date of the financial period
 - statement: VARCHAR(2) - "IS" (Income Statement), "BS" (Balance Sheet), or "CF" (Cash Flow)
-- metric: VARCHAR(100) - Name of the financial metric
+- metric_id: SMALLINT FOREIGN KEY -> companies_financialmetric.id
 - value: DECIMAL - Value of the metric (in thousands of local currency)
-- currency: VARCHAR(3)
+- Always JOIN companies_financialmetric m ON f.metric_id = m.id to filter or display metric names
 
 Key Income Statement (IS) metrics:
 - 'Total Revenues' - Primary revenue metric (use this for revenue)
@@ -230,10 +234,11 @@ Rules:
     few_shot_examples = """
 Example 1: "Companies with positive revenue growth last year"
 WITH revenue AS (
-  SELECT company_id, period_end_date, value,
-         ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY period_end_date DESC) as rn
-  FROM companies_financial
-  WHERE metric = 'Total Revenues' AND statement = 'IS'
+  SELECT f.company_id, f.period_end_date, f.value,
+         ROW_NUMBER() OVER (PARTITION BY f.company_id ORDER BY f.period_end_date DESC) as rn
+  FROM companies_financial f
+  JOIN companies_financialmetric m ON f.metric_id = m.id
+  WHERE m.name = 'Total Revenues' AND f.statement = 'IS'
 )
 SELECT c.id, c.ticker, c.name,
        r1.value as latest_revenue,
@@ -250,10 +255,13 @@ WITH margins AS (
          CAST(f1.value AS REAL) / NULLIF(f2.value, 0) as op_margin,
          ROW_NUMBER() OVER (PARTITION BY f1.company_id ORDER BY f1.period_end_date DESC) as rn
   FROM companies_financial f1
+  JOIN companies_financialmetric m1 ON f1.metric_id = m1.id
   JOIN companies_financial f2 ON f1.company_id = f2.company_id
     AND f1.period_end_date = f2.period_end_date
-    AND f2.metric = 'Total Revenues' AND f2.statement = 'IS'
-  WHERE f1.metric = 'Operating Income' AND f1.statement = 'IS'
+    AND f2.statement = 'IS'
+  JOIN companies_financialmetric m2 ON f2.metric_id = m2.id
+  WHERE m1.name = 'Operating Income' AND f1.statement = 'IS'
+    AND m2.name = 'Total Revenues'
 ),
 recent AS (
   SELECT company_id, AVG(op_margin) as avg_margin
@@ -278,10 +286,11 @@ WHERE c.sector = 'Technology' AND c.market_cap > 100000000
 
 Example 4: "Companies with positive gross profit (excludes banks/insurance that don't have this metric)"
 WITH gross AS (
-  SELECT company_id, period_end_date, value,
-         ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY period_end_date DESC) as rn
-  FROM companies_financial
-  WHERE metric = 'Gross Profit' AND statement = 'IS'
+  SELECT f.company_id, f.period_end_date, f.value,
+         ROW_NUMBER() OVER (PARTITION BY f.company_id ORDER BY f.period_end_date DESC) as rn
+  FROM companies_financial f
+  JOIN companies_financialmetric m ON f.metric_id = m.id
+  WHERE m.name = 'Gross Profit' AND f.statement = 'IS'
 )
 SELECT c.id, c.ticker, c.name, c.sector, g.value as gross_profit
 FROM companies_company c

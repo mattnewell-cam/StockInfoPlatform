@@ -50,11 +50,23 @@ class Company(models.Model):
         ttm_is_fy = (financials_dict["IS"][1][-1] == financials_dict["IS"][1][-2] and
                      financials_dict["CF"][1][-1] == financials_dict["CF"][1][-2])
 
+        # Build metric lookup (bulk get-or-create)
+        all_metric_names = {
+            line[0] for _, data in financials_dict.items() for line in data[1:] if line[0]
+        }
+        FinancialMetric.objects.bulk_create(
+            [FinancialMetric(name=n) for n in all_metric_names], ignore_conflicts=True
+        )
+        metric_map = {m.name: m for m in FinancialMetric.objects.filter(name__in=all_metric_names)}
+
         entries = []
         for statement, data in financials_dict.items():
             years = data[0]
             for line in data[1:]:
-                metric = line[0]
+                metric_name = line[0]
+                metric_obj = metric_map.get(metric_name)
+                if not metric_obj:
+                    continue
                 for year_index, value in enumerate(line[1:]):
 
                     year = years[year_index + 1]  # Because enumerate starts at 0 but we're going from line[1]
@@ -79,9 +91,8 @@ class Company(models.Model):
                         company=self,
                         period_end_date=period_end_date,
                         statement=statement,
-                        metric=metric,
+                        metric=metric_obj,
                         value=value,
-                        currency=self.currency
                     ))
                     # try:
                     #     Financial.objects.update_or_create(
@@ -185,6 +196,14 @@ class Filing(models.Model):
         return f"{self.company.name}: {self.filing_type} ({self.filing_date})"
 
 
+class FinancialMetric(models.Model):
+    id = models.SmallAutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Financial(models.Model):
     STATEMENT_CHOICES = {
         "IS": "Income Statement",
@@ -195,9 +214,8 @@ class Financial(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="financials", db_index=False)
     period_end_date = models.DateField()
     statement = models.CharField(max_length=2, choices=STATEMENT_CHOICES)
-    metric = models.CharField(max_length=100)
+    metric = models.ForeignKey(FinancialMetric, on_delete=models.CASCADE, related_name="financials", db_index=False)
     value = models.DecimalField(max_digits=20, decimal_places=6)
-    currency = models.CharField(max_length=3, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -212,7 +230,7 @@ class Financial(models.Model):
         indexes = []
 
     def __str__(self) -> str:
-        return f"{self.company.ticker} {self.period_end_date} {self.metric} {self.value}"
+        return f"{self.company.ticker} {self.period_end_date} {self.metric.name} {self.value}"
 
 
 class StockPrice(models.Model):

@@ -900,7 +900,7 @@ class CompanyDetailView(DetailView):
         ctx = super().get_context_data(**kwargs)
 
         items = list(
-            Financial.objects.filter(company=self.object).values_list("statement", "metric", "period_end_date", "value")
+            Financial.objects.filter(company=self.object).values_list("statement", "metric__name", "period_end_date", "value")
         )
 
         buckets = defaultdict(list)

@@ -87,7 +87,16 @@ def ensure_parent(path: str):
 
 def load_json(path: str, default):
     p = Path(path)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
+    if not p.exists():
+        return default
+    raw = p.read_text(encoding="utf-8").strip()
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        print(f"Warning: failed to parse JSON at {path}; using default")
+        return default
 
 
 def _compact_dumps(obj, indent=2, _level=0):
@@ -285,20 +294,23 @@ def assert_authenticated(driver):
 
 # --- Table extraction ---
 
-def ensure_k_units(driver, timeout=10):
+def ensure_k_units(driver, timeout=4):
     if getattr(driver, "_k_units_attempted", False):
         return
     driver._k_units_attempted = True
     try:
-        label = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((
-                By.XPATH,
-                "//label[.//span[contains(@class,'mantine-SegmentedControl-innerLabel') and normalize-space()='K']]",
-            ))
-        )
-        if label.get_attribute("data-active") != "true":
-            safe_click(driver, label)
-            time.sleep(0.2)
+        # Find, check, and click all in one JS call — no stale element risk.
+        WebDriverWait(driver, timeout).until(lambda d: d.execute_script("""
+            for (var l of document.querySelectorAll('label')) {
+                for (var s of l.querySelectorAll('span.mantine-SegmentedControl-innerLabel')) {
+                    if (s.textContent.trim() === 'K') {
+                        if (l.getAttribute('data-active') !== 'true') l.click();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        """))
     except Exception:
         pass
 
@@ -312,7 +324,10 @@ def extract_rows_from_table(table_root):
                 const root = arguments[0];
                 const rowEls = root.querySelectorAll('tr, [role="row"]');
                 const out = [];
-                for (const r of rowEls) {
+                for (let i = 0; i < rowEls.length; i++) {
+                  const r = rowEls[i];
+                  const isParent = r.classList.contains('parent-item') || r.querySelector('.parent-item');
+                  if (!(i === 0 || isParent)) continue;
                   const cellEls = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
                   out.push(Array.from(cellEls).map(c => (c.innerText || c.textContent || '').trim()));
                 }
@@ -327,7 +342,16 @@ def extract_rows_from_table(table_root):
             pass
 
     parsed = []
-    for row in table_root.find_elements(By.CSS_SELECTOR, "tr, [role='row']"):
+    for idx, row in enumerate(table_root.find_elements(By.CSS_SELECTOR, "tr, [role='row']")):
+        row_class = (row.get_attribute("class") or "").lower()
+        cell_class = ""
+        if "parent-item" not in row_class:
+            cells = row.find_elements(By.CSS_SELECTOR, "th, td, [role='columnheader'], [role='cell']")
+            if cells:
+                cell_class = (cells[0].get_attribute("class") or "").lower()
+        is_parent = ("parent-item" in row_class) or ("parent-item" in cell_class)
+        if not (idx == 0 or is_parent):
+            continue
         cells = row.find_elements(By.CSS_SELECTOR, "th, td, [role='columnheader'], [role='cell']")
         vals = [c.text.strip() for c in cells]
         if len(vals) >= 2 and any(vals[1:]):
@@ -340,10 +364,12 @@ def extract_all_tables_from_page(driver):
         const tables = document.querySelectorAll('[data-sentry-component="TableContent"]');
         return Array.from(tables).map(table => {
             const rows = table.querySelectorAll('tr, [role="row"]');
-            return Array.from(rows).map(r => {
+            return Array.from(rows).map((r, i) => {
+                const isParent = r.classList.contains('parent-item') || r.querySelector('.parent-item');
+                if (!(i === 0 || isParent)) return null;
                 const cells = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
                 return Array.from(cells).map(c => (c.innerText || c.textContent || '').trim());
-            }).filter(row => row.length >= 2 && row.slice(1).some(v => v));
+            }).filter(row => row && row.length >= 2 && row.slice(1).some(v => v));
         }).filter(t => t.length > 0);
     """)
     return all_tables or []
@@ -398,23 +424,50 @@ def _count_filled_data_cells(driver):
     return total
 
 
-def _wait_for_stable_data(driver, timeout=30, stable_for=1.5, poll=0.4):
-    """Poll until the filled-cell count stops changing for `stable_for` seconds.
-
-    Handles both fast-loading companies (count jumps then holds) and genuinely
-    sparse companies (small stable count from the start).
-    """
+def _wait_for_complete_is_table(driver, timeout=15, poll=0.1, max_empty_ratio=0.5):
+    """Wait until IS has <= max_empty_ratio empty value cells (skips header col)."""
     deadline = time.time() + timeout
-    last_count = -1
-    stable_since = None
     while time.time() < deadline:
-        count = _count_filled_data_cells(driver)
-        if count != last_count:
-            last_count = count
-            stable_since = time.time() if count > 0 else None
-        elif stable_since is not None and time.time() - stable_since >= stable_for:
-            return
+        is_ready, not_found = driver.execute_script("""
+            var table = document.querySelector('[data-sentry-component="TableContent"]');
+            var body = (document.body && document.body.innerText || '').toLowerCase();
+            var nf = /not found|no results|no data|does not exist|cannot find|data not found|data is not available for/.test(body);
+            if (!table) return [false, nf];
+            var rows = table.querySelectorAll('tr, [role="row"]');
+            if (!rows || rows.length < 2) return [false, nf];
+            var headerCells = rows[0].querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
+            var colCount = headerCells ? headerCells.length : 0;
+            if (colCount < 2) return [false, nf];
+            function isParentRow(r) {
+                return r.classList.contains('parent-item') || r.querySelector('.parent-item');
+            }
+            function isValue(v) {
+                if (!v) return false;
+                var t = ('' + v).trim();
+                if (!t) return false;
+                return !(t === '-' || t === '—' || t === '–');
+            }
+            var total = 0;
+            var empty = 0;
+            for (var i = 1; i < rows.length; i++) {
+                var r = rows[i];
+                if (!isParentRow(r)) continue;
+                var cells = r.querySelectorAll('th, td, [role="columnheader"], [role="cell"]');
+                for (var c = 1; c < Math.min(cells.length, colCount); c++) {
+                    total++;
+                    if (!isValue(cells[c].innerText || cells[c].textContent)) empty++;
+                }
+            }
+            if (total === 0) return [false, nf];
+            var emptyRatio = empty / total;
+            return [emptyRatio <= arguments[0], nf];
+        """, max_empty_ratio)
+        if not_found:
+            return False, True
+        if is_ready:
+            return True, False
         time.sleep(poll)
+    return False, False
 
 
 def _load_page(driver, ticker, slug, multi_table=False):
@@ -438,43 +491,46 @@ def _load_page(driver, ticker, slug, multi_table=False):
     if is_404:
         raise PageNotFoundError(f"{ticker}: page not found (fiscal.ai 404)")
 
+    quick_missing_check(driver, ticker, timeout=2 if FAST_MODE else 4)
+
     if slug == "income-statement" and not multi_table:
         ensure_k_units(driver)
 
-    quick_missing_check(driver, ticker, timeout=2 if FAST_MODE else 4)
-
-    # Wait until filled cell count is stable (data has finished loading).
-    _wait_for_stable_data(driver)
-
     if multi_table:
-        table_count = driver.execute_script(
-            "return document.querySelectorAll('[data-sentry-component=\"TableContent\"]').length;"
-        )
-        if table_count >= 3:
-            return extract_all_tables_from_page(driver)
-        if 0 < table_count < 3:
-            raise IncompleteDataError(f"{ticker} {slug}: only {table_count} table(s), expected 3")
-        # table_count == 0: data may still be loading, fall through to timed wait
-        WebDriverWait(driver, 15 if FAST_MODE else 20).until(
-            lambda d: d.execute_script("""
-                return document.querySelectorAll('[data-sentry-component="TableContent"]').length >= 3;
+        # Poll until count reaches 3 (done) or stabilises below 3 (incomplete company).
+        # Also bail immediately if error text appears in the page body.
+        deadline = time.time() + (15 if FAST_MODE else 20)
+        last_count, stable_since = 0, None
+        while time.time() < deadline:
+            count, not_found = driver.execute_script("""
+                var count = document.querySelectorAll('[data-sentry-component="TableContent"]').length;
+                var body = (document.body && document.body.innerText || '').toLowerCase();
+                var nf = /not found|no results|no data|does not exist|cannot find|data not found|data is not available for/.test(body);
+                return [count, nf];
             """)
-        )
-        return extract_all_tables_from_page(driver)
+            if not_found:
+                raise PageNotFoundError(f"{ticker}: not found or data unavailable")
+            if count >= 3:
+                return extract_all_tables_from_page(driver)
+            if count != last_count:
+                last_count = count
+                stable_since = time.time() if count > 0 else None
+            elif stable_since and time.time() - stable_since >= 0.5:
+                raise IncompleteDataError(f"{ticker} {slug}: only {count} table(s), expected 3")
+            time.sleep(0.1)
+        raise TimeoutError(f"{ticker}: timeout waiting for tables on {slug}")
 
-    WebDriverWait(driver, 15 if FAST_MODE else 20).until(
-        lambda d: len(d.find_elements(
-            By.CSS_SELECTOR,
-            '[data-sentry-component="TableContent"] tr, [data-sentry-component="TableContent"] [role="row"]',
-        )) > 1
-    )
+    # Single-table (IS): wait until every visible year column has at least one real value.
+    is_ready, not_found = _wait_for_complete_is_table(driver, timeout=15, poll=0.1)
+    if not_found:
+        raise PageNotFoundError(f"{ticker}: not found or data unavailable")
+    if not is_ready:
+        raise TimeoutError(f"{ticker} {slug}: timeout waiting for full IS columns")
 
-    # Re-fetch table_root fresh — the earlier reference may be stale after React re-renders on auth.
-    table_root = wait_for_table(driver, timeout=10 if FAST_MODE else 15)
-    rows = extract_rows_from_table(table_root)
-    if not rows or len(rows[0]) < 2:
+    tables = extract_all_tables_from_page(driver)
+    if not tables or not tables[0] or len(tables[0][0]) < 2:
         raise RuntimeError(f"{ticker} {slug} returned empty rows")
-    return rows
+    return tables[0]
 
 
 # --- Statement pulling ---
@@ -503,21 +559,6 @@ def pull_financials(driver, ticker, exchange="LSE"):
     return rows_by_stmt, exchange
 
 
-def pull_supplemental(driver, ticker, exchange="LSE"):
-    fiscal_ticker = build_fiscal_ticker(ticker, exchange)
-    result = {}
-    for stmt, config in SUPPLEMENTAL_TABLES.items():
-        tables = _load_page(driver, fiscal_ticker, config["slug"], multi_table=True)
-        found = []
-        for name in config["names"]:
-            t = find_table_by_name(tables, name)
-            if t:
-                found.extend(t)
-        if found:
-            result[stmt] = dedupe_rows(found)
-    return result, exchange
-
-
 # --- Data helpers ---
 
 def dedupe_rows(rows):
@@ -540,18 +581,31 @@ def validate_financials(financials):
     return [req for req in ("IS", "BS", "CF") if req not in financials or not financials[req]]
 
 
+def _is_has_data(ticker_data):
+    """Return False if IS is missing or >50% of value cells are empty strings."""
+    rows = ticker_data.get("IS", [])
+    if not rows:
+        return False
+    total = empty = 0
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 2:
+            continue
+        for v in row[1:]:
+            total += 1
+            if not isinstance(v, str) or not v.strip():
+                empty += 1
+    if total == 0:
+        return False
+    return (empty / total) <= 0.5
+
+
 def needs_work(ticker_data):
-    """Return True if the ticker needs a (re-)scrape: missing entirely or incomplete supplemental sections."""
+    """Return True if the ticker needs a (re-)scrape: missing entirely or missing key statements."""
     if not ticker_data:
         return True
-    def labels(stmt):
-        return [(r[0] or "").strip().lower() for r in ticker_data.get(stmt, []) if r]
-    bs = labels("BS")
-    cf = labels("CF")
-    has_liabilities = any("liabilit" in l for l in bs)
-    has_equity = any("equity" in l for l in bs)
-    has_financing = any("financing" in l for l in cf)
-    return not (has_liabilities and has_equity and has_financing)
+    if not _is_has_data(ticker_data):
+        return True
+    return any(not ticker_data.get(stmt) for stmt in ("IS", "BS", "CF"))
 
 
 def remove_ticker_from_csv(ticker, csv_path):
@@ -645,9 +699,31 @@ def main():
     cached = load_json(OUT_JSON, {})
     failed_set = load_failed_set(FAILED_CSV)
     state = {"processed": 0, "total": 0, "started_at": time.time(), "ok": 0, "failed": 0}
-
     if args.ticker:
         tickers, ticker_market = [args.ticker], {}
+        raw_ticker = args.ticker.strip()
+        if "-" in raw_ticker:
+            prefix, tail = raw_ticker.split("-", 1)
+            known_prefixes = {
+                "NasdaqGS", "NasdaqGM", "NasdaqCM",
+                "NYSE", "NYS", "NYQ", "NAS", "NMS", "NGS",
+                "LSE", "AIM",
+            }
+            if prefix in known_prefixes and tail:
+                tickers = [tail]
+                ticker_market[tail] = prefix
+        # If running a single ticker, try to resolve its exchange from the tickers CSV.
+        try:
+            with open(TICKERS_CSV, newline="") as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if row and row[0].strip().upper() == args.ticker.strip().upper():
+                        if len(row) >= 2 and row[1].strip():
+                            ticker_market[args.ticker.strip()] = normalize_exchange(row[1].strip())
+                        break
+        except Exception:
+            pass
     else:
         tickers, ticker_market = [], {}
         with open(TICKERS_CSV, newline="") as f:
@@ -690,25 +766,15 @@ def main():
         def worker_run(worker_id, driver, worker_tickers):
             for t in worker_tickers:
                 exchange = ticker_market.get(t, "LSE")
-                is_cached = t in cached
-                kind = "supplemental" if is_cached else "full"
+                kind = "full"
 
                 started = time.perf_counter()
                 try:
-                    if is_cached:
-                        (supp, used_exchange), attempts = retry(lambda: pull_supplemental(driver, t, exchange))
-                        with lock:
-                            cached[t]["exchange"] = used_exchange
-                            for stmt, rows in supp.items():
-                                cached[t][stmt] = merge_rows(cached[t].get(stmt, []), rows)
-                            save_json(OUT_JSON, cached)
-                        row_counts = {k: len(cached[t].get(k, [])) for k in ("IS", "BS", "CF")}
-                    else:
-                        (financials, used_exchange), attempts = retry(lambda: pull_financials(driver, t, exchange))
-                        with lock:
-                            cached[t] = {"exchange": used_exchange, **financials}
-                            save_json(OUT_JSON, cached)
-                        row_counts = {k: len(financials.get(k, [])) for k in ("IS", "BS", "CF")}
+                    (financials, used_exchange), attempts = retry(lambda: pull_financials(driver, t, exchange))
+                    with lock:
+                        cached[t] = {"exchange": used_exchange, **financials}
+                        save_json(OUT_JSON, cached)
+                    row_counts = {k: len(financials.get(k, [])) for k in ("IS", "BS", "CF")}
 
                     missing = validate_financials(cached[t])
                     if missing:
