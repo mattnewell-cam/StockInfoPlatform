@@ -249,9 +249,7 @@ class StockPrice(models.Model):
                 name="uniq_company_date_price"
             )
         ]
-        indexes = [
-            models.Index(fields=["company", "date"])
-        ]
+        indexes = []
         ordering = ["date"]
 
     def __str__(self) -> str:

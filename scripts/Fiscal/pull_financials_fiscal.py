@@ -693,7 +693,22 @@ def main():
     parser.add_argument("--ticker", default="")
     parser.add_argument("--magic-link", default="")
     parser.add_argument("--login-email", default=LOGIN_EMAIL)
+    parser.add_argument(
+        "--output",
+        default="",
+        help=f"Write JSON to this path (default: {OUT_JSON})",
+    )
+    parser.add_argument(
+        "--tickers-csv",
+        default="",
+        dest="tickers_csv",
+        help=f"Read tickers from this CSV (default: {TICKERS_CSV})",
+    )
     args = parser.parse_args()
+
+    # Allow CLI overrides for output path and tickers CSV.
+    out_json = args.output.strip() or OUT_JSON
+    tickers_csv = args.tickers_csv.strip() or TICKERS_CSV
 
     if not args.magic_link and not args.login_email:
         raise RuntimeError("Missing login email. Set --login-email or FISCAL_LOGIN_EMAIL.")
@@ -720,7 +735,7 @@ def main():
         raise last
 
     lock = Lock()
-    cached = load_json(OUT_JSON, {})
+    cached = load_json(out_json, {})
     failed_set = load_failed_set(FAILED_CSV)
     state = {"processed": 0, "total": 0, "started_at": time.time(), "ok": 0, "failed": 0}
     if args.ticker:
@@ -738,7 +753,7 @@ def main():
                 ticker_market[tail] = prefix
         # If running a single ticker, try to resolve its exchange from the tickers CSV.
         try:
-            with open(TICKERS_CSV, newline="") as f:
+            with open(tickers_csv, newline="") as f:
                 reader = csv.reader(f)
                 next(reader, None)
                 for row in reader:
@@ -750,7 +765,7 @@ def main():
             pass
     else:
         tickers, ticker_market = [], {}
-        with open(TICKERS_CSV, newline="") as f:
+        with open(tickers_csv, newline="") as f:
             reader = csv.reader(f)
             next(reader, None)
             for row in reader:
@@ -797,7 +812,7 @@ def main():
                     (financials, used_exchange), attempts = retry(lambda: pull_financials(driver, t, exchange))
                     with lock:
                         cached[t] = {"exchange": used_exchange, **financials}
-                        save_json(OUT_JSON, cached)
+                        save_json(out_json, cached)
                     row_counts = {k: len(financials.get(k, [])) for k in ("IS", "BS", "CF")}
 
                     missing = validate_financials(cached[t])
@@ -826,10 +841,10 @@ def main():
                             with open(FAILED_CSV, "a", newline="") as f:
                                 csv.writer(f).writerow([t, exchange, reason_type, reason])
                         if reason_type == "page_not_found":
-                            remove_ticker_from_csv(t, TICKERS_CSV)
+                            remove_ticker_from_csv(t, tickers_csv)
                             append_to_not_found_csv(t, exchange)
                         elif reason_type == "incomplete_data":
-                            remove_ticker_from_csv(t, TICKERS_CSV)
+                            remove_ticker_from_csv(t, tickers_csv)
                             append_to_incomplete_csv(t, exchange)
 
                     log_event({"event": "ticker_failed", "ticker": t, "kind": kind,

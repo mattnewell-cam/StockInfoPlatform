@@ -121,6 +121,15 @@ class Command(BaseCommand):
             help='Skip creating new companies (only update existing)'
         )
         parser.add_argument(
+            '--target-exchange',
+            type=str,
+            help=(
+                'Filter companies by this exact exchange value (e.g. LSE, AIM, NMS). '
+                'Bypasses EXCHANGE_ALIASES lookup and targets the exact DB row. '
+                'Also enables overwrite (ignores existing financials check).'
+            )
+        )
+        parser.add_argument(
             '--dry-run',
             action='store_true',
             help='Show what would be done without making changes'
@@ -131,6 +140,7 @@ class Command(BaseCommand):
         single_ticker = options.get('ticker')
         skip_create = options.get('skip_create')
         dry_run = options.get('dry_run')
+        target_exchange = options.get('target_exchange')
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN - no changes will be made"))
@@ -152,7 +162,8 @@ class Command(BaseCommand):
             total = len(tickers_to_process)
             metric_map = self._preload_metrics(data, tickers_to_process, dry_run)
             _created, _updated, _failed = self._process_file(
-                data, tickers_to_process, total, skip_create, dry_run, metric_map
+                data, tickers_to_process, total, skip_create, dry_run, metric_map,
+                target_exchange=target_exchange,
             )
             created_companies += _created
             updated_companies += _updated
@@ -194,7 +205,8 @@ class Command(BaseCommand):
                 existing[name] = FinancialMetric(name=name)
         return existing
 
-    def _process_file(self, data, tickers_to_process, total, skip_create, dry_run, metric_map):
+    def _process_file(self, data, tickers_to_process, total, skip_create, dry_run, metric_map,
+                      target_exchange=None):
         created_companies = 0
         updated_companies = 0
         failed = 0
@@ -212,7 +224,10 @@ class Command(BaseCommand):
             ticker_data = data[raw_ticker]
             exchange = ticker_data.get("exchange")
 
-            if exchange:
+            if target_exchange:
+                # Exact-match lookup: bypass alias resolution entirely.
+                company = Company.objects.filter(ticker=ticker, exchange=target_exchange).first()
+            elif exchange:
                 aliases = EXCHANGE_ALIASES.get(exchange, [exchange])
                 company = Company.objects.filter(ticker=ticker, exchange__in=aliases).first()
                 # Fallback: exchange alias may not match what's stored — try ticker-only
@@ -237,7 +252,7 @@ class Command(BaseCommand):
                     self.stderr.write(self.style.ERROR(f"  Failed to create company {ticker}: {e}"))
                     failed += 1
                     continue
-            elif not OVERWRITE and company.financials.exists():
+            elif not target_exchange and not OVERWRITE and company.financials.exists():
                 self.stdout.write(f"  Already has financials, skipping")
                 continue
             entries = []

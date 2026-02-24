@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import login, logout as auth_logout
 from django.contrib import messages
 from collections import defaultdict
+from xml.sax.saxutils import escape
 import csv
 import json
 import yfinance as yf
@@ -29,94 +30,60 @@ def _get_company_by_slug(slug):
 
 
 ROBOTS_TXT = """\
-User-agent: GPTBot
-Disallow: /
-
-User-agent: ChatGPT-User
-Disallow: /
-
-User-agent: Google-Extended
-Disallow: /
-
-User-agent: CCBot
-Disallow: /
-
-User-agent: anthropic-ai
-Disallow: /
-
-User-agent: ClaudeBot
-Disallow: /
-
-User-agent: Claude-Web
-Disallow: /
-
-User-agent: Bytespider
-Disallow: /
-
-User-agent: Diffbot
-Disallow: /
-
-User-agent: FacebookBot
-Disallow: /
-
-User-agent: PerplexityBot
-Disallow: /
-
-User-agent: YouBot
-Disallow: /
-
-User-agent: Applebot-Extended
-Disallow: /
-
-User-agent: cohere-ai
-Disallow: /
-
-User-agent: AI2Bot
-Disallow: /
-
-User-agent: Ai2Bot-Dolma
-Disallow: /
-
-User-agent: PetalBot
-Disallow: /
-
-User-agent: Amazonbot
-Disallow: /
-
-User-agent: OAI-SearchBot
-Disallow: /
-
-User-agent: Meta-ExternalAgent
-Disallow: /
-
-User-agent: ImagesiftBot
-Disallow: /
-
-User-agent: Omgilibot
-Disallow: /
-
-User-agent: Timpibot
-Disallow: /
-
-User-agent: VelenpublicBot
-Disallow: /
-
-User-agent: Webzio-Extended
-Disallow: /
-
-User-agent: iaskspider
-Disallow: /
-
-User-agent: Scrapy
-Disallow: /
-
 User-agent: *
 Allow: /
+
+Sitemap: https://tearsheet.one/sitemap.xml
 """
 
 
 def robots_txt(request):
     return HttpResponse(ROBOTS_TXT, content_type="text/plain")
+
+
+def sitemap_xml(request):
+    def add_url(path, lastmod=None, changefreq=None, priority=None):
+        loc = escape(request.build_absolute_uri(path))
+        entry = [
+            "  <url>",
+            f"    <loc>{loc}</loc>",
+        ]
+        if lastmod:
+            entry.append(f"    <lastmod>{lastmod}</lastmod>")
+        if changefreq:
+            entry.append(f"    <changefreq>{changefreq}</changefreq>")
+        if priority:
+            entry.append(f"    <priority>{priority}</priority>")
+        entry.append("  </url>")
+        return entry
+
+    today = timezone.now().date().isoformat()
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+
+    lines.extend(add_url("/", lastmod=today, changefreq="daily", priority="1.0"))
+    lines.extend(add_url("/screener/", lastmod=today, changefreq="weekly", priority="0.6"))
+
+    companies = Company.objects.exclude(exchange="").exclude(ticker="").values(
+        "exchange", "ticker", "updated_at"
+    )
+    for company in companies:
+        slug = f"{company['exchange']}-{company['ticker']}"
+        updated_at = company.get("updated_at")
+        lastmod = updated_at.date().isoformat() if updated_at else None
+        lines.extend(
+            add_url(
+                f"/companies/{slug}/",
+                lastmod=lastmod,
+                changefreq="weekly",
+                priority="0.8",
+            )
+        )
+
+    lines.append("</urlset>")
+    return HttpResponse("\n".join(lines), content_type="application/xml")
 
 
 def home(request):
@@ -1826,4 +1793,3 @@ def screener_saved_delete(request, screen_id):
         return JsonResponse({"success": True})
     except SavedScreen.DoesNotExist:
         return JsonResponse({"error": "Screen not found"}, status=404)
-
