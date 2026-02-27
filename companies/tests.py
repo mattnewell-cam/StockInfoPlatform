@@ -24,6 +24,8 @@ class SymbolMappingTests(TestCase):
         self.assertEqual(normalize_exchange(" lse "), "LSE")
         self.assertEqual(normalize_exchange(""), "")
         self.assertEqual(normalize_exchange(None), "")
+        self.assertEqual(normalize_exchange("NasdaqGS"), "NMS")
+        self.assertEqual(normalize_exchange("NYSE"), "NYQ")
 
     def test_yfinance_symbol_lse_aim_and_us(self):
         self.assertEqual(yfinance_symbol("BT.A", "LSE"), "BT-A.L")
@@ -57,10 +59,11 @@ class CompanyDetailFiscalPipelineTests(TestCase):
         self._add_financial("IS", "Total Revenues", date(2024, 12, 31), 1000)
         self._add_financial("IS", "Cost of Goods Sold, Total", date(2024, 12, 31), 400)
         self._add_financial("IS", "Net Income", date(2024, 12, 31), 120)
+        slug = f"{self.company.exchange}-{self.company.ticker}"
 
-        request = self.factory.get(f"/companies/{self.company.ticker}/")
+        request = self.factory.get(f"/companies/{slug}/")
         request.user = AnonymousUser()
-        response = CompanyDetailView.as_view()(request, ticker=self.company.ticker)
+        response = CompanyDetailView.as_view()(request, slug=slug)
         response.render()
 
         is_table = response.context_data["IS_table"]
@@ -72,9 +75,10 @@ class CompanyDetailFiscalPipelineTests(TestCase):
         self.assertNotIn("Total Revenues", metric_names)
 
     def test_detail_view_handles_empty_financials(self):
-        request = self.factory.get(f"/companies/{self.company.ticker}/")
+        slug = f"{self.company.exchange}-{self.company.ticker}"
+        request = self.factory.get(f"/companies/{slug}/")
         request.user = AnonymousUser()
-        response = CompanyDetailView.as_view()(request, ticker=self.company.ticker)
+        response = CompanyDetailView.as_view()(request, slug=slug)
         response.render()
 
         self.assertEqual(response.context_data["IS_table"]["rows"], [])
@@ -116,15 +120,16 @@ class NotificationFlowTests(TestCase):
         self.factory = RequestFactory()
 
     def test_follow_unfollow_endpoints(self):
-        req1 = self.factory.post(f"/companies/{self.company.ticker}/follow/")
+        slug = f"{self.company.exchange}-{self.company.ticker}"
+        req1 = self.factory.post(f"/companies/{slug}/follow/")
         req1.user = self.user
-        r1 = follow_company(req1, ticker=self.company.ticker)
+        r1 = follow_company(req1, slug=slug)
         self.assertEqual(r1.status_code, 200)
         self.assertTrue(Follow.objects.filter(user=self.user, company=self.company).exists())
 
-        req2 = self.factory.post(f"/companies/{self.company.ticker}/unfollow/")
+        req2 = self.factory.post(f"/companies/{slug}/unfollow/")
         req2.user = self.user
-        r2 = unfollow_company(req2, ticker=self.company.ticker)
+        r2 = unfollow_company(req2, slug=slug)
         self.assertEqual(r2.status_code, 200)
         self.assertFalse(Follow.objects.filter(user=self.user, company=self.company).exists())
 

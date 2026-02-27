@@ -61,6 +61,7 @@ def migrate_table(sqlite_conn, pg_dsn, table, batch_size=2000):
 
     cols = get_columns(sqlite_conn, table)
     cols_quoted = ", ".join(f'"{c}"' for c in cols)
+    value_idx = cols.index("value") if table == "companies_financial" and "value" in cols else None
 
     total = sqlite_conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
     print(f"  {total:,} rows to insert")
@@ -80,6 +81,9 @@ def migrate_table(sqlite_conn, pg_dsn, table, batch_size=2000):
                     if not rows:
                         break
                     for row in rows:
+                        if value_idx is not None:
+                            row = list(row)
+                            row[value_idx] = _coerce_financial_value_to_int(row[value_idx])
                         copy.write_row(row)
                     inserted += len(rows)
                     print(f"  {inserted:,}/{total:,}", end="\r", flush=True)
@@ -97,6 +101,21 @@ def migrate_table(sqlite_conn, pg_dsn, table, batch_size=2000):
 
     print(f"  {inserted:,}/{total:,} — done")
     return inserted
+
+
+def _coerce_financial_value_to_int(value):
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(round(value))
+    try:
+        return int(round(float(value)))
+    except Exception:
+        return 0
 
 
 def main():

@@ -16,9 +16,24 @@ django.setup()
 
 from django.contrib.auth.models import User
 from companies.models import (
-    Company, Financial, StockPrice, Note, NoteCompany,
+    Company, Financial, FinancialMetric, StockPrice, Note, NoteCompany,
     DiscussionThread, DiscussionMessage, ChatSession, ChatMessage
 )
+
+
+def _coerce_financial_value(value):
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(round(value))
+    try:
+        return int(round(float(value)))
+    except Exception:
+        return 0
 
 def run():
     with open('db_export.json', 'r') as f:
@@ -68,14 +83,28 @@ def run():
     print("Importing financials...")
     Financial.objects.all().delete()
     financials = []
+    metric_cache = {}
     for row in data.get('companies_financial', []):
+        metric_id = row.get('metric_id') or row.get('metric_fk_id')
+        metric_value = row.get('metric')
+        if not metric_id and isinstance(metric_value, int):
+            metric_id = metric_value
+        if not metric_id and isinstance(metric_value, str):
+            name = metric_value.strip()
+            if name:
+                if name not in metric_cache:
+                    metric_cache[name], _ = FinancialMetric.objects.get_or_create(name=name)
+                metric_id = metric_cache[name].id
+        if not metric_id:
+            continue
+
         financials.append(Financial(
             id=row['id'],
             company_id=row['company_id'],
             statement=row['statement'],
-            metric=row['metric'],
+            metric_id=metric_id,
             period_end_date=row['period_end_date'],
-            value=row['value'],
+            value=_coerce_financial_value(row.get('value')),
         ))
     Financial.objects.bulk_create(financials, batch_size=500)
     print(f"  {len(financials)} financials")

@@ -11,9 +11,49 @@ YF_SUFFIX_BY_EXCHANGE = {
     "AIM": ".L",
 }
 
+# Canonical exchange values stored in Company.exchange.
+EXCHANGE_CANONICAL_MAP = {
+    "LSE": "LSE",
+    "AIM": "AIM",
+    "NYSE": "NYQ",
+    "NYQ": "NYQ",
+    "NYS": "NYQ",
+    "PCX": "NYQ",  # NYSE Arca
+    "YHD": "NYQ",  # NYSE American (formerly AMEX)
+    "BTS": "NYQ",  # NYSE Chicago
+    "NASDAQ": "NMS",
+    "NMS": "NMS",
+    "NAS": "NMS",
+    "NGS": "NMS",
+    "NGM": "NMS",
+    "NCM": "NMS",
+    "NASDAQGS": "NMS",
+    "NASDAQGM": "NMS",
+    "NASDAQCM": "NMS",
+}
+
+# Normalize yfinance exchange outputs to canonical stored values.
+YF_EXCHANGE_NORMALIZE = {
+    "NYQ": "NYQ",
+    "NMS": "NMS",
+    "NYS": "NYQ",
+    "PCX": "NYQ",
+    "YHD": "NYQ",
+    "BTS": "NYQ",
+    "NasdaqGS": "NMS",
+    "NasdaqGM": "NMS",
+    "NasdaqCM": "NMS",
+    "NGM": "NMS",
+    "NCM": "NMS",
+}
+
 
 def normalize_exchange(exchange: str | None) -> str:
-    return (exchange or "").strip().upper()
+    raw = (exchange or "").strip()
+    if not raw:
+        return ""
+    upper = raw.upper()
+    return EXCHANGE_CANONICAL_MAP.get(upper, upper)
 
 
 def yfinance_symbol(ticker: str, exchange: str | None = None) -> str:

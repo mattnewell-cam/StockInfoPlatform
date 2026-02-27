@@ -2,21 +2,22 @@
 Fix company exchanges that were incorrectly set to LSE.
 
 Sources:
-  data/all_us_tickers.csv        - active US tickers  (ticker, exchange)
-  data/all_us_tickers_removed.csv - removed US tickers (ticker, exchange)
+  data/all_us_tickers.csv         - active US tickers  (ticker, exchange)
+  data/all_us_tickers_removed.csv - removed US tickers (optional via --include-removed)
   data/lse_all_tickers.csv       - LSE/AIM tickers    (ticker, market)
 
 Logic:
   1. If ticker is in lse_all_tickers.csv → keep as LSE or update to AIM; skip US lookup.
-  2. If ticker is NOT in lse_all_tickers.csv but IS in a US CSV → update to US exchange.
+  2. If ticker is NOT in lse_all_tickers.csv but IS in active US CSV → update to US exchange.
   3. Otherwise → leave unchanged.
 
-Tickers that appear in both CSVs are left as LSE (to be resolved separately).
+Tickers that appear in both CSVs are left as LSE.
 """
 
 import csv
 from django.core.management.base import BaseCommand
 from companies.models import Company
+from companies.utils import normalize_exchange
 
 
 class Command(BaseCommand):
@@ -28,21 +29,39 @@ class Command(BaseCommand):
             action="store_true",
             help="Print changes without applying them",
         )
+        parser.add_argument(
+            "--include-removed",
+            action="store_true",
+            help=(
+                "Also use data/all_us_tickers_removed.csv for exchange mapping. "
+                "Off by default to avoid remapping live companies from delisted symbol data."
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
+        include_removed = options["include_removed"]
 
         # --- Build lookup tables ---
         us_exchange = {}
-        for fname in ["data/all_us_tickers.csv", "data/all_us_tickers_removed.csv"]:
+        us_files = ["data/all_us_tickers.csv"]
+        if include_removed:
+            us_files.append("data/all_us_tickers_removed.csv")
+        for fname in us_files:
             with open(fname, newline="") as f:
                 for row in csv.DictReader(f):
-                    us_exchange[row["ticker"]] = row["exchange"]
+                    ticker = (row.get("ticker") or "").strip().upper()
+                    exchange = normalize_exchange(row.get("exchange"))
+                    if ticker and exchange:
+                        us_exchange[ticker] = exchange
 
         lse_market = {}
         with open("data/lse_all_tickers.csv", newline="") as f:
             for row in csv.DictReader(f):
-                lse_market[row["ticker"]] = row["market"] if row["market"] else "LSE"
+                ticker = (row.get("ticker") or "").strip().upper()
+                market = normalize_exchange(row.get("market") or "LSE") or "LSE"
+                if ticker:
+                    lse_market[ticker] = market
 
         # Tickers in both CSVs — flag for later, leave untouched
         both = set(us_exchange) & set(lse_market)
@@ -71,7 +90,6 @@ class Command(BaseCommand):
             changes.setdefault(new_ex, []).append(ticker)
 
         # --- Report ---
-        total_updates = sum(len(v) for v in changes.items())
         self.stdout.write(f"\nExchange updates to apply: {sum(len(v) for v in changes.values())}")
         for ex, tickers in sorted(changes.items()):
             self.stdout.write(f"  {ex}: {len(tickers)}")

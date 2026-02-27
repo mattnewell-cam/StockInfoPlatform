@@ -1,21 +1,14 @@
 import os
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from django.db.models import Q
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from companies.models import Company
-from companies.utils import yfinance_symbol
+from companies.utils import yfinance_symbol, YF_EXCHANGE_NORMALIZE, normalize_exchange
 import yfinance as yf
 import yfinance.cache as yf_cache
-import signal
 import time
-
-
-class TimeoutError(Exception):
-    pass
-
-
-def timeout_handler(signum, frame):
-    raise TimeoutError("Timed out")
 
 
 def is_rate_limit_error(err: Exception) -> bool:
@@ -35,6 +28,11 @@ class Command(BaseCommand):
             '--ticker',
             type=str,
             help='Update a specific ticker only',
+        )
+        parser.add_argument(
+            '--exchange',
+            type=str,
+            help='Optional exchange filter when used with --ticker (e.g. LSE, NMS, NYQ)',
         )
         parser.add_argument(
             '--all',
@@ -63,6 +61,50 @@ class Command(BaseCommand):
             default=30,
             help='Seconds before timing out a request (default: 30)',
         )
+        parser.add_argument(
+            '--limit',
+            type=int,
+            default=None,
+            help='Maximum number of companies to process in this run',
+        )
+        parser.add_argument(
+            '--offset',
+            type=int,
+            default=0,
+            help='Skip this many companies after filtering (default: 0)',
+        )
+        parser.add_argument(
+            '--min-id',
+            type=int,
+            default=None,
+            help='Only process companies with id >= this value',
+        )
+        parser.add_argument(
+            '--max-id',
+            type=int,
+            default=None,
+            help='Only process companies with id <= this value',
+        )
+        parser.add_argument(
+            '--checkpoint-file',
+            type=str,
+            default='',
+            help='Optional file path storing the last processed company id',
+        )
+        parser.add_argument(
+            '--resume-from-checkpoint',
+            action='store_true',
+            help='Resume from the id recorded in --checkpoint-file',
+        )
+
+    def _fetch_info(self, symbol: str, timeout: int) -> dict | None:
+        """Fetch yfinance info for a symbol with a thread-based timeout. Returns None on timeout."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(yf.Ticker(symbol).get_info)
+            try:
+                return future.result(timeout=timeout)
+            except FuturesTimeoutError:
+                return None
 
     def handle(self, *args, **options):
         cache_dir = os.getenv("YFINANCE_CACHE_DIR") or os.path.join(
@@ -72,14 +114,36 @@ class Command(BaseCommand):
         yf_cache.set_cache_location(cache_dir)
 
         ticker = options.get('ticker')
+        exchange_filter = normalize_exchange(options.get('exchange'))
         dry_run = options.get('dry_run')
         names_only = options.get('names_only')
         process_all = options.get('all')
         sleep_seconds = options.get('sleep')
         timeout_seconds = options.get('timeout')
+        limit = options.get('limit')
+        offset = max(0, options.get('offset') or 0)
+        min_id = options.get('min_id')
+        max_id = options.get('max_id')
+        checkpoint_file = (options.get('checkpoint_file') or '').strip()
+        resume_from_checkpoint = options.get('resume_from_checkpoint')
+
+        if resume_from_checkpoint and not checkpoint_file:
+            self.stderr.write(self.style.ERROR(
+                "--resume-from-checkpoint requires --checkpoint-file"
+            ))
+            return
+        if resume_from_checkpoint:
+            resume_id = self._read_checkpoint_id(checkpoint_file)
+            if resume_id is not None:
+                min_id = max(min_id or 0, resume_id + 1)
+                self.stdout.write(f"Resuming from checkpoint id {resume_id} (next id >= {min_id})")
+            else:
+                self.stdout.write("Checkpoint file not found or invalid; starting from filtered queryset")
 
         if ticker:
             companies = Company.objects.filter(ticker=ticker)
+            if exchange_filter:
+                companies = companies.filter(exchange=exchange_filter)
         elif names_only:
             # Only companies where name equals ticker (stubs)
             companies = Company.objects.extra(where=['name = ticker'])
@@ -95,6 +159,16 @@ class Command(BaseCommand):
             )
             companies = Company.objects.filter(missing)
 
+        companies = companies.order_by('id')
+        if min_id is not None:
+            companies = companies.filter(id__gte=min_id)
+        if max_id is not None:
+            companies = companies.filter(id__lte=max_id)
+        if offset:
+            companies = companies[offset:]
+        if limit is not None:
+            companies = companies[:limit]
+
         total = companies.count()
         updated = 0
         failed = 0
@@ -102,25 +176,32 @@ class Command(BaseCommand):
         self.stdout.write(f"Processing {total} companies...")
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN - no changes will be made"))
+        self.stdout.flush()
 
         for i, company in enumerate(companies, 1):
             try:
-                # Set timeout for get_info call if supported on this platform
-                if hasattr(signal, "SIGALRM"):
-                    signal.signal(signal.SIGALRM, timeout_handler)
-                    signal.alarm(timeout_seconds)
+                symbol = yfinance_symbol(company.ticker, company.exchange)
+                info = self._fetch_info(symbol, timeout_seconds)
 
-                yf_ticker = yf.Ticker(yfinance_symbol(company.ticker, company.exchange))
-                info = yf_ticker.get_info()
+                # If the exchange-suffixed lookup found nothing, fall back to bare ticker
+                if (info is None or (not info.get("longName") and not info.get("shortName"))) and symbol != company.ticker:
+                    info = self._fetch_info(company.ticker, timeout_seconds)
 
-                if hasattr(signal, "SIGALRM"):
-                    signal.alarm(0)  # Cancel the alarm
+                if info is None:
+                    self.stdout.write(self.style.WARNING(
+                        f"[{i}/{total}] {company.ticker}: timed out, skipping"
+                    ))
+                    self.stdout.flush()
+                    failed += 1
+                    continue
 
                 # Extract fields
                 name = info.get("longName") or info.get("shortName") or ""
                 if name:
                     name = name.replace("Public Limited Company", "plc")
                 exchange = info.get("exchange", "")
+                exchange = YF_EXCHANGE_NORMALIZE.get(exchange, exchange)
+                exchange = normalize_exchange(exchange)
                 currency = info.get("currency", "")
                 market_cap = info.get("marketCap")
                 shares = info.get("sharesOutstanding")
@@ -171,6 +252,7 @@ class Command(BaseCommand):
                     updated += 1
                 else:
                     self.stdout.write(f"[{i}/{total}] {company.ticker}: no changes needed")
+                self.stdout.flush()
 
                 if sleep_seconds and sleep_seconds > 0:
                     time.sleep(sleep_seconds)
@@ -192,6 +274,23 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write(self.style.ERROR(f"[{i}/{total}] {company.ticker}: FAILED - {e}"))
                     failed += 1
+            finally:
+                if checkpoint_file:
+                    self._write_checkpoint_id(checkpoint_file, company.id)
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS(f"Done. Updated: {updated}, Failed: {failed}, Unchanged: {total - updated - failed}"))
+
+    def _read_checkpoint_id(self, path: str) -> int | None:
+        try:
+            raw = Path(path).read_text(encoding='utf-8').strip()
+            if not raw:
+                return None
+            return int(raw)
+        except Exception:
+            return None
+
+    def _write_checkpoint_id(self, path: str, company_id: int) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(str(company_id), encoding='utf-8')

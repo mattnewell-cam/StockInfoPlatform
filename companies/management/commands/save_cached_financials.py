@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
+from django.db.models import Count
 from companies.models import Company, Financial, FinancialMetric
-from companies.utils import end_of_month
+from companies.utils import end_of_month, normalize_exchange
 import json
 import re
 
@@ -53,21 +54,21 @@ def parse_value(value_str):
     Parse a value string, converting em dashes and other special chars to 0.
     """
     if not value_str or not isinstance(value_str, str):
-        return 0.0
+        return 0
 
     value_str = value_str.strip()
 
     # Empty string
     if not value_str:
-        return 0.0
+        return 0
 
     # Em dash (Unicode) - treat as zero
     if value_str == '\u2014' or value_str == '—':
-        return 0.0
+        return 0
 
     # Regular dash alone - treat as zero
     if value_str == '-':
-        return 0.0
+        return 0
 
     # Clean up the string
     cleaned = value_str.replace(',', '').replace('£', '').replace('$', '').strip()
@@ -77,16 +78,23 @@ def parse_value(value_str):
         cleaned = '-' + cleaned[1:-1]
 
     try:
-        return float(cleaned)
+        return round(float(cleaned))
     except ValueError:
-        return 0.0
+        return 0
 
 
-# Maps fiscal-normalised exchange names → yfinance exchange codes stored in Company.exchange
+# Maps source exchange labels to canonical Company.exchange candidates.
 EXCHANGE_ALIASES = {
-    "NasdaqGS": ["NMS"],
+    "NMS": ["NMS"],
+    "NASDAQ": ["NMS"],
+    "NASDAQGS": ["NMS"],
+    "NASDAQGM": ["NMS"],
+    "NASDAQCM": ["NMS"],
+    "NYQ": ["NYQ"],
     "NYSE": ["NYQ"],
+    "NYS": ["NYQ"],
     "LSE": ["LSE"],
+    "AIM": ["AIM"],
 }
 
 
@@ -95,8 +103,38 @@ DEFAULT_FILES = [
     'data/all_us_financials.json',
 ]
 
-# DecimalField(max_digits=20, decimal_places=6) => abs(value) must be < 10^14
+# Safety bound for obviously corrupt values.
 MAX_ABS_VALUE = 1e14
+
+# Metrics that are never rendered to users — dropped by the display pipeline in views.py.
+# Keep this in sync with FISCAL_METRICS_DROP in companies/views.py.
+# These are skipped at import time to avoid storing data we'll never show.
+METRICS_NEVER_DISPLAYED = {
+    "Total Revenues % Chg.",
+    "Total Revenues %Chg",
+    "Operating Margin",
+    "Interest Expense",
+    "Interest Expense, Total",
+    "Interest And Invest. Income",
+    "Interest And Investment Income",
+    "Interest and Investment Income",
+    "Gross Profit Margin",
+    "Earnings From Continuing Operations",
+    "Net Income to Common Excl. Extra Items",
+    "Net Income to Common Incl Extra Items",
+    "Total Shares Outstanding",
+    "EBT, Excl. Unusual Items",
+    "Basic EPS",
+    "Diluted EPS",
+    "EPS",
+    "EPS Diluted",
+    "Basic Weighted Average Shares Outstanding",
+    "Diluted Weighted Average Shares Outstanding",
+    "EBITDA",
+    "Effective Tax Rate",
+    "Gross Property Plant And Equipment",
+    "Accumulated Depreciation",
+}
 
 
 class Command(BaseCommand):
@@ -118,7 +156,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--skip-create',
             action='store_true',
-            help='Skip creating new companies (only update existing)'
+            help='Skip creating new companies (legacy flag; now default behavior)'
+        )
+        parser.add_argument(
+            '--create-missing',
+            action='store_true',
+            help='Allow creating missing company rows from the financials payload',
         )
         parser.add_argument(
             '--target-exchange',
@@ -132,18 +175,42 @@ class Command(BaseCommand):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Show what would be done without making changes'
+            help='Show what would be done without making changes',
+        )
+        parser.add_argument(
+            '--limit',
+            type=int,
+            default=None,
+            help='Stop after this many companies have had financials saved',
+        )
+        parser.add_argument(
+            '--allow-ticker-fallback',
+            action='store_true',
+            help=(
+                "Allow ticker-only fallback when exchange matching fails. "
+                "Off by default to prevent writing to the wrong ticker/exchange row."
+            ),
         )
 
     def handle(self, *args, **options):
         file_paths = options['file']
         single_ticker = options.get('ticker')
-        skip_create = options.get('skip_create')
+        if options.get('create_missing'):
+            skip_create = False
+        elif options.get('skip_create'):
+            skip_create = True
+        else:
+            # Safe default: do not create new rows unless explicitly requested.
+            skip_create = True
         dry_run = options.get('dry_run')
-        target_exchange = options.get('target_exchange')
+        target_exchange = normalize_exchange(options.get('target_exchange'))
+        limit = options.get('limit')
+        allow_ticker_fallback = options.get('allow_ticker_fallback')
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN - no changes will be made"))
+        if skip_create:
+            self.stdout.write("Safe mode: missing companies will be skipped (use --create-missing to override).")
 
         created_companies = 0
         updated_companies = 0
@@ -161,9 +228,15 @@ class Command(BaseCommand):
             tickers_to_process = [single_ticker] if single_ticker else list(data.keys())
             total = len(tickers_to_process)
             metric_map = self._preload_metrics(data, tickers_to_process, dry_run)
+            remaining = None if limit is None else limit - updated_companies
+            if remaining is not None and remaining <= 0:
+                self.stdout.write("Limit reached, stopping.")
+                break
             _created, _updated, _failed = self._process_file(
                 data, tickers_to_process, total, skip_create, dry_run, metric_map,
                 target_exchange=target_exchange,
+                allow_ticker_fallback=allow_ticker_fallback,
+                limit=remaining,
             )
             created_companies += _created
             updated_companies += _updated
@@ -186,7 +259,8 @@ class Command(BaseCommand):
             for statement in ['IS', 'BS', 'CF']:
                 for row in ticker_data.get(statement, [])[1:]:
                     if row and row[0] and row[0] not in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
-                        raw_metric_names.add(row[0])
+                        if row[0] not in METRICS_NEVER_DISPLAYED:
+                            raw_metric_names.add(row[0])
 
         if not raw_metric_names:
             return {}
@@ -206,12 +280,15 @@ class Command(BaseCommand):
         return existing
 
     def _process_file(self, data, tickers_to_process, total, skip_create, dry_run, metric_map,
-                      target_exchange=None):
+                      target_exchange=None, allow_ticker_fallback=False, limit=None):
         created_companies = 0
         updated_companies = 0
         failed = 0
 
         for i, raw_ticker in enumerate(tickers_to_process, 1):
+            if limit is not None and updated_companies >= limit:
+                self.stdout.write(f"Limit of {limit} companies reached, stopping.")
+                break
             ticker = raw_ticker.rstrip('.')
 
             self.stdout.write(f"[{i}/{total}] Processing {ticker}...")
@@ -222,30 +299,40 @@ class Command(BaseCommand):
                 continue
 
             ticker_data = data[raw_ticker]
-            exchange = ticker_data.get("exchange")
+            source_exchange = ticker_data.get("exchange")
+            normalized_source_exchange = normalize_exchange(source_exchange)
 
             if target_exchange:
                 # Exact-match lookup: bypass alias resolution entirely.
                 company = Company.objects.filter(ticker=ticker, exchange=target_exchange).first()
-            elif exchange:
-                aliases = EXCHANGE_ALIASES.get(exchange, [exchange])
-                company = Company.objects.filter(ticker=ticker, exchange__in=aliases).first()
-                # Fallback: exchange alias may not match what's stored — try ticker-only
-                if company is None:
-                    company = Company.objects.filter(ticker=ticker).first()
             else:
-                company = Company.objects.filter(ticker=ticker).first()
+                company = self._resolve_company(
+                    ticker=ticker,
+                    source_exchange=normalized_source_exchange,
+                    allow_ticker_fallback=allow_ticker_fallback,
+                )
+
+            if isinstance(company, str):
+                # Ambiguous match marker with explanatory message.
+                self.stderr.write(self.style.ERROR(f"  {company}"))
+                failed += 1
+                continue
             if company is None:
                 if skip_create:
                     self.stdout.write(f"  Skipping {ticker} - not in database")
                     continue
 
                 if dry_run:
-                    self.stdout.write(f"  Would create company {ticker}")
+                    self.stdout.write(
+                        f"  Would create company {ticker} ({normalized_source_exchange or 'LSE'})"
+                    )
                     continue
 
                 try:
-                    company = self._create_company(ticker)
+                    company = self._create_company(
+                        ticker=ticker,
+                        exchange=normalized_source_exchange or "LSE",
+                    )
                     created_companies += 1
                     self.stdout.write(self.style.SUCCESS(f"  Created company: {company.name}"))
                 except Exception as e:
@@ -278,6 +365,8 @@ class Command(BaseCommand):
 
                     metric_name = row[0]
                     if not metric_name or metric_name in ['Income Statement', 'Balance Sheet', 'Cash Flow']:
+                        continue
+                    if metric_name in METRICS_NEVER_DISPLAYED:
                         continue
                     metric_obj = metric_map.get(metric_name)
                     if not metric_obj:
@@ -351,13 +440,71 @@ class Command(BaseCommand):
 
         return created_companies, updated_companies, failed
 
-    def _create_company(self, ticker):
+    def _exchange_candidates(self, source_exchange):
+        normalized = normalize_exchange(source_exchange)
+        if not normalized:
+            return []
+        aliases = EXCHANGE_ALIASES.get(normalized, [normalized])
+        out = []
+        for ex in aliases:
+            value = normalize_exchange(ex)
+            if value and value not in out:
+                out.append(value)
+        return out
+
+    def _pick_best_company(self, queryset):
+        rows = list(queryset.annotate(fin_count=Count("financials")))
+        if not rows:
+            return None
+        if len(rows) == 1:
+            return rows[0]
+
+        rows.sort(key=lambda c: c.fin_count, reverse=True)
+        top = rows[0]
+        if top.fin_count > 0 and all(r.fin_count == 0 for r in rows[1:]):
+            return top
+        return None
+
+    def _resolve_company(self, ticker, source_exchange, allow_ticker_fallback=False):
+        candidates = self._exchange_candidates(source_exchange)
+        if candidates:
+            candidate_qs = Company.objects.filter(ticker=ticker, exchange__in=candidates)
+            picked = self._pick_best_company(candidate_qs)
+            if picked:
+                return picked
+            if candidate_qs.count() > 1:
+                return (
+                    f"Ambiguous exchange match for {ticker} from source exchange "
+                    f"{source_exchange}: exchanges {sorted(set(candidate_qs.values_list('exchange', flat=True)))}. "
+                    "Use --target-exchange explicitly."
+                )
+
+        if not allow_ticker_fallback:
+            return None
+
+        fallback = self._pick_best_company(Company.objects.filter(ticker=ticker))
+        if fallback:
+            return fallback
+
+        rows = Company.objects.filter(ticker=ticker).values_list("exchange", flat=True)
+        row_count = rows.count()
+        if row_count > 1:
+            return (
+                f"Ambiguous ticker-only fallback for {ticker}: "
+                f"{row_count} rows across exchanges {sorted(set(rows))}. "
+                "Use --target-exchange explicitly."
+            )
+        return None
+
+    def _create_company(self, ticker, exchange):
         """Create a minimal company record (no yfinance needed)."""
+        normalized_exchange = normalize_exchange(exchange) or "LSE"
+        default_currency = "GBp" if normalized_exchange in {"LSE", "AIM"} else "USD"
         company = Company.objects.create(
             name=ticker,  # Just use ticker as name for now
-            exchange="LSE",
+            exchange=normalized_exchange,
             ticker=ticker,
-            currency="GBp",
+            currency=default_currency,
             FYE_month=12,  # Default to December
         )
         return company

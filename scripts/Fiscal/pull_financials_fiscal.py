@@ -704,11 +704,22 @@ def main():
         dest="tickers_csv",
         help=f"Read tickers from this CSV (default: {TICKERS_CSV})",
     )
+    parser.add_argument(
+        "--mutate-tickers-csv",
+        action="store_true",
+        help=(
+            "Allow removing failed tickers from the source tickers CSV. "
+            "Disabled by default to avoid accidental universe shrink."
+        ),
+    )
     args = parser.parse_args()
 
     # Allow CLI overrides for output path and tickers CSV.
     out_json = args.output.strip() or OUT_JSON
     tickers_csv = args.tickers_csv.strip() or TICKERS_CSV
+    mutate_tickers_csv = bool(args.mutate_tickers_csv)
+    if not mutate_tickers_csv:
+        print("Safe mode: source tickers CSV will NOT be modified (use --mutate-tickers-csv to enable).")
 
     if not args.magic_link and not args.login_email:
         raise RuntimeError("Missing login email. Set --login-email or FISCAL_LOGIN_EMAIL.")
@@ -841,10 +852,12 @@ def main():
                             with open(FAILED_CSV, "a", newline="") as f:
                                 csv.writer(f).writerow([t, exchange, reason_type, reason])
                         if reason_type == "page_not_found":
-                            remove_ticker_from_csv(t, tickers_csv)
+                            if mutate_tickers_csv:
+                                remove_ticker_from_csv(t, tickers_csv)
                             append_to_not_found_csv(t, exchange)
                         elif reason_type == "incomplete_data":
-                            remove_ticker_from_csv(t, tickers_csv)
+                            if mutate_tickers_csv:
+                                remove_ticker_from_csv(t, tickers_csv)
                             append_to_incomplete_csv(t, exchange)
 
                     log_event({"event": "ticker_failed", "ticker": t, "kind": kind,
